@@ -24,6 +24,7 @@ Use sources to learn the course, not to copy it.
 - Prefer breadth across lectures over many items on the last slide deck.
 - Include at least one question that needs combining two ideas from different weeks when the materials support it.
 - Match the course's language (variable names, theorem titles). Write exponents as `a^n` or `a^{n}` and inequalities as `>=` / `<=` (the PDF renderer turns these into superscripts and ≥ ≤). Do not leave a visible caret in the intended print form.
+- Macro / program / pseudocode definitions belong in `code`, not in the stem. English prompt in `stem`, indented listing in `code`, follow-up sentence in `stem_after`. Never flatten a loop into `rem = left; while rem >= right: { rem = rem - right }`.
 
 ## Marks and time
 

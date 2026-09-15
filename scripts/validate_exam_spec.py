@@ -27,6 +27,22 @@ def _is_num(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def _check_code(errors: list[str], loc: str, raw: Any) -> None:
+    if raw is None:
+        return
+    if isinstance(raw, str):
+        return
+    if isinstance(raw, list):
+        if not all(isinstance(item, (str, int, float)) or item is None for item in raw):
+            _err(errors, f"{loc} list items must be strings")
+        return
+    if isinstance(raw, dict):
+        if not any(raw.get(key) for key in ("text", "source", "lines")):
+            _err(errors, f"{loc} object needs text, source, or lines")
+        return
+    _err(errors, f"{loc} must be a string, list of lines, or object")
+
+
 def validate(spec: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if not isinstance(spec, dict):
@@ -82,8 +98,9 @@ def validate(spec: dict[str, Any]) -> list[str]:
             qtype = str(q.get("type") or "").strip()
             if qtype not in ALLOWED_TYPES:
                 _err(errors, f"{qloc} type must be one of {sorted(ALLOWED_TYPES)}")
-            if not str(q.get("stem") or "").strip() and not q.get("parts"):
-                _err(errors, f"{qloc} needs a stem or parts")
+            if not str(q.get("stem") or "").strip() and not q.get("parts") and not q.get("code"):
+                _err(errors, f"{qloc} needs a stem, code listing, or parts")
+            _check_code(errors, f"{qloc}.code", q.get("code"))
             marks = q.get("marks")
             if not _is_num(marks) or marks <= 0:
                 _err(errors, f"{qloc} marks must be a positive number")
@@ -118,9 +135,12 @@ def validate(spec: dict[str, Any]) -> list[str]:
                     part_marks = 0.0
                     for pi, part in enumerate(parts):
                         ploc = f"{qloc}.parts[{pi}]"
-                        if not isinstance(part, dict) or not str(part.get("stem") or "").strip():
-                            _err(errors, f"{ploc} needs a stem")
+                        if not isinstance(part, dict) or (
+                            not str(part.get("stem") or "").strip() and not part.get("code")
+                        ):
+                            _err(errors, f"{ploc} needs a stem or code listing")
                             continue
+                        _check_code(errors, f"{ploc}.code", part.get("code"))
                         pm = part.get("marks")
                         if pm is not None:
                             if not _is_num(pm) or pm < 0:

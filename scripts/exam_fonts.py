@@ -9,7 +9,29 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 _FAMILY = "ExamSerif"
+_MONO = "ExamMono"
+_MONO_BOLD = "ExamMono-Bold"
 _REGISTERED = False
+_MONO_REGISTERED = False
+
+_MONO_PATHS = (
+    (
+        Path("/System/Library/Fonts/Supplemental/Courier New.ttf"),
+        Path("/System/Library/Fonts/Supplemental/Courier New Bold.ttf"),
+    ),
+    (
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"),
+    ),
+    (
+        Path("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf"),
+    ),
+    (
+        Path("/usr/share/fonts/truetype/freefont/FreeMono.ttf"),
+        Path("/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf"),
+    ),
+)
 
 _PAIRS = (
     (
@@ -80,3 +102,36 @@ def ensure_exam_font() -> str:
         except Exception:
             continue
     return "Times-Roman"
+
+
+def mono_font() -> str:
+    ensure_mono_font()
+    names = set(pdfmetrics.getRegisteredFontNames())
+    return _MONO if _MONO in names else "Courier"
+
+
+def mono_bold_font() -> str:
+    ensure_mono_font()
+    names = set(pdfmetrics.getRegisteredFontNames())
+    if _MONO_BOLD in names:
+        return _MONO_BOLD
+    return "Courier-Bold"
+
+
+def ensure_mono_font() -> str:
+    global _MONO_REGISTERED
+    if _MONO_REGISTERED:
+        names = set(pdfmetrics.getRegisteredFontNames())
+        return _MONO if _MONO in names else "Courier"
+    _MONO_REGISTERED = True
+    for regular, bold in _MONO_PATHS:
+        if not regular.is_file():
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont(_MONO, str(regular)))
+            if bold.is_file():
+                pdfmetrics.registerFont(TTFont(_MONO_BOLD, str(bold)))
+            return _MONO
+        except Exception:
+            continue
+    return "Courier"

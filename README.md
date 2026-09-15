@@ -55,6 +55,7 @@ Helpers:
 ```bash
 python -m pip install -r requirements.txt
 python scripts/generate_exam_pdf.py templates/exam_spec.example.json -o /tmp/mock-exam-paper.pdf
+python scripts/generate_exam_pdf.py templates/macro.example.json -o /tmp/macro-paper.pdf
 python scripts/render_graph.py templates/dfa.example.json -o /tmp/dfa.pdf
 ```
 
@@ -66,7 +67,7 @@ This repo also contains `graph-diagram/`, a separate Hermes skill that draws DFA
 scp -r graph-diagram root@YOUR_SERVER:~/.hermes/skills/diagrams/graph-diagram
 ```
 
-Then start a **new** Hermes session. For automata exam questions, Hermes should set a `diagram` object so the picture is embedded in the mock-exam PDF.
+Then start a **new** Hermes session. For automata exam questions, Hermes should set a `diagram` object so the picture is embedded in the mock-exam PDF. For macro / pseudocode items, Hermes should set `code` (boxed listing) and `stem_after` instead of inlining the program in `stem`.
 
 ## Layout
 

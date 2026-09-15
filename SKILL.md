@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials.
-version: 0.3.1
+version: 0.3.2
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -62,6 +62,7 @@ Helpers print JSON to stdout and exit non-zero on failure.
 | Student paper PDF | `generate_exam_pdf.py exam.json -o paper.pdf`  **no** `--answers` |
 | Marking key PDF | `generate_exam_pdf.py exam.json -o answers.pdf --answers` |
 | DFA / NFA figure | question field `diagram` (see `graph-diagram` skill and `templates/dfa.example.json`) |
+| Macro / code box | question field `code` + optional `stem_after` (`templates/macro.example.json`) |
 | Spec shape | `templates/exam_spec.schema.json`, `templates/exam_spec.example.json` |
 | Pedagogy | `references/question-design.md` |
 
@@ -71,7 +72,7 @@ Helpers print JSON to stdout and exit non-zero on failure.
 2. **Extract.** `terminal(command="python ${HERMES_SKILL_DIR}/scripts/extract_materials.py …", timeout=120)`. Read the JSON with `read_file` (or stdout). Skip `skipped` / `error` records. If `likely_scanned` is true, rasterise or use `vision_analyze` / the `pdf` skill OCR path; do not treat empty text as "this deck has no content". For images (`.png`/`.jpg`), use `vision_analyze`.
 3. **Blueprint.** From the extracts, list taught topics, typical question styles, and a marks × time plan. Follow `references/question-design.md`. Completion: every requested topic is assigned marks, and total marks match the agreed duration.
 4. **Author original questions.** Write new stems. Match course notation. Fill `answer` and `marking_notes` for every item. Completion: no stem is a paraphrase of a single source question.
-5. **Write spec JSON** with `write_file` using `templates/exam_spec.example.json` as the shape (`references/exam-spec.md`). IDs unique. MCQ has ≥2 choices. Part marks sum to the parent. `meta.total_marks` equals the question sum. If the item is about a DFA/NFA, put a `diagram` object on the question — do not leave the machine as a `s0 --a--> s1` sentence. Load `graph-diagram` if you need a standalone figure first.
+5. **Write spec JSON** with `write_file` using `templates/exam_spec.example.json` as the shape (`references/exam-spec.md`). IDs unique. MCQ has ≥2 choices. Part marks sum to the parent. `meta.total_marks` equals the question sum. If the item is about a DFA/NFA, put a `diagram` object on the question — do not leave the machine as a `s0 --a--> s1` sentence. Load `graph-diagram` if you need a standalone figure first. If the item is a **macro / pseudocode definition**, put the program in `code` as a **multiline** string with 4-space indent (`if`/`while` on their own lines). Keep `stem` as the English intro only, and put “Which … does this define?” in `stem_after`. Never write `rem = left; while rem >= right: { rem = rem - right }` inside `stem`. See `templates/macro.example.json`.
 6. **Validate.** `terminal(command="python ${HERMES_SKILL_DIR}/scripts/validate_exam_spec.py exam.json", timeout=30)`. Fix every error; do not render until `"ok": true`.
 7. **Render two files.** Student paper **without** `--answers` to a name containing `paper`. Answer key **with** `--answers` to a **different** file containing `answers`. Never give the user only the answers PDF as the exam. Never pass `--answers` when writing the student paper. Completion: both JSON results have `"ok": true`.
 8. **Deliver.** In the reply, state course, duration, total marks, and both absolute PDF paths. Put `[[as_document]]` on its own last line.
@@ -85,6 +86,7 @@ Helpers print JSON to stdout and exit non-zero on failure.
 - **MCQ layout:** never use reportlab `ListFlowable` / markdown bullets for options. `generate_exam_pdf.py` prints `(A) …`. If you hand-build a PDF, use the same `(A)` form.
 - **Answer key** must not be merged into the student paper. `--answers` is only for the second file.
 - **Automata:** if the question needs a DFA/NFA, set `diagram` and let the renderer draw it. Do not ask the student to decode a long transition sentence instead of a picture.
+- **Macros / code:** never inline a program as one sentence in `stem`. Use `code` (boxed listing) and `stem_after` for the question that follows the box. Indent nested `while`/`if` with 4 spaces. Leave `<=` / `>=` as operators inside `code` (do not rewrite them as prose).
 - If `reportlab` / `pypdf` are missing, install from `${HERMES_SKILL_DIR}/requirements.txt` and retry — do not hand-write a one-off PDF script.
 
 ## Verification

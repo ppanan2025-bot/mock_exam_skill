@@ -42,6 +42,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from code_block import CodeBlock, looks_like_code_blob
 from exam_fonts import body_font, ensure_exam_font, italic_font
 from exam_text import format_exam_text
 
@@ -292,6 +293,11 @@ def _question_flowables(
     if stem:
         bits.append(Spacer(1, 2 * mm))
         bits.append(_p(stem, styles["stem"]))
+    _append_code(bits, question.get("code"))
+    after = str(question.get("stem_after") or "").strip()
+    if after:
+        bits.append(Spacer(1, 2 * mm))
+        bits.append(_p(after, styles["stem"]))
     qtype = str(question.get("type") or "")
     diagram = question.get("diagram")
     if isinstance(diagram, dict) and (diagram.get("states") or diagram.get("transitions")):
@@ -311,6 +317,11 @@ def _question_flowables(
         mark_bit = f"  [{pmarks:g} marks]" if isinstance(pmarks, (int, float)) else ""
         bits.append(Spacer(1, 1.5 * mm))
         bits.append(_p(f"{label}{part.get('stem', '')}{mark_bit}", styles["stem"]))
+        _append_code(bits, part.get("code"))
+        part_after = str(part.get("stem_after") or "").strip()
+        if part_after:
+            bits.append(Spacer(1, 1.5 * mm))
+            bits.append(_p(part_after, styles["stem"]))
         if not answers:
             n = part.get("answer_lines")
             bits.append(Spacer(1, 1 * mm))
@@ -340,6 +351,14 @@ def _question_flowables(
     if qtype in {"mcq", "true_false", "short", "fill_blank"}:
         return [KeepTogether(bits)]
     return bits
+
+
+def _append_code(bits: list[Any], raw: Any) -> None:
+    if not looks_like_code_blob(raw):
+        return
+    bits.append(Spacer(1, 2.5 * mm))
+    bits.append(CodeBlock(raw, CONTENT_W))
+    bits.append(Spacer(1, 2.5 * mm))
 
 
 def build_story(spec: dict[str, Any], answers: bool) -> list[Any]:
