@@ -98,6 +98,29 @@ class GraphRenderTests(unittest.TestCase):
             self.assertTrue(out.is_file())
             self.assertGreater(out.stat().st_size, 500)
 
+    def test_nfa_with_loops_gets_a_tall_box(self) -> None:
+        from automata_diagram import AutomataDiagram, diagram_height
+
+        spec = {
+            "kind": "nfa",
+            "caption": "NFA for Question A6",
+            "states": ["q0", "q1", "q2"],
+            "start": "q0",
+            "accept": ["q2"],
+            "transitions": [
+                ["q0", "a", "q0"],
+                ["q0", "b", "q1"],
+                ["q0", "b", "q2"],
+                ["q1", "b", "q1"],
+                ["q1", "a", "q2"],
+                ["q2", "a", "q0"],
+            ],
+        }
+        height = diagram_height(spec)
+        self.assertGreaterEqual(height, 90)
+        box = AutomataDiagram(spec, 400)
+        self.assertGreaterEqual(box.height, 90)
+
 
 class ExtractMaterialsTests(unittest.TestCase):
     def test_markdown_file(self) -> None:

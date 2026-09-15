@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Layout and draw DFA / NFA / directed graphs with reportlab (no Graphviz required)."""
+"""Layout and draw DFA / NFA / directed graphs with reportlab."""
 
 from __future__ import annotations
 
@@ -12,6 +12,10 @@ from reportlab.platypus import Flowable
 
 INK = colors.HexColor("#1a1a1a")
 ACCENT = colors.HexColor("#111111")
+STATE_R = 16.0
+LOOP_R = 12.0
+START_LEN = 26.0
+PAD = 44.0
 
 
 def normalize_diagram(raw: dict[str, Any]) -> dict[str, Any]:
@@ -51,22 +55,33 @@ def normalize_diagram(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _layout(states: list[str], width: float, height: float) -> dict[str, tuple[float, float]]:
+def diagram_height(spec: dict[str, Any], width: float | None = None) -> float:
+    n = max(1, len(normalize_diagram(spec)["states"]))
+    caption = 16 if normalize_diagram(spec)["caption"] else 0
+    return max(78 * mm, 58 * mm + n * 16 * mm) + caption
+
+
+def _layout(states: list[str], starts: list[str], width: float, height: float) -> tuple[dict[str, tuple[float, float]], tuple[float, float]]:
     n = len(states)
-    cx, cy = width / 2.0, height / 2.0 + 4
+    cx, cy = width / 2.0, height / 2.0
+    inner_w = max(80.0, width - 2 * PAD)
+    inner_h = max(80.0, height - 2 * PAD)
     if n == 0:
-        return {}
+        return {}, (cx, cy)
     if n == 1:
-        return {states[0]: (cx, cy)}
+        return {states[0]: (cx, cy)}, (cx, cy)
     if n == 2:
-        gap = min(width * 0.28, 70)
-        return {states[0]: (cx - gap, cy), states[1]: (cx + gap, cy)}
-    radius = min(width, height) * 0.33
+        gap = min(inner_w * 0.32, 90)
+        return {states[0]: (cx - gap, cy), states[1]: (cx + gap, cy)}, (cx, cy)
+    radius = min(inner_w, inner_h) * 0.42
+    start_name = starts[0] if starts and starts[0] in states else states[0]
+    start_idx = states.index(start_name)
     pos = {}
     for i, name in enumerate(states):
-        angle = math.pi / 2 + (2 * math.pi * i / n)
+        # Start state on the left; remaining states go clockwise.
+        angle = math.pi + 2 * math.pi * ((i - start_idx) % n) / n
         pos[name] = (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
-    return pos
+    return pos, (cx, cy)
 
 
 def _group_edges(transitions: list[tuple[str, str, str]]) -> dict[tuple[str, str], str]:
@@ -78,37 +93,53 @@ def _group_edges(transitions: list[tuple[str, str, str]]) -> dict[tuple[str, str
     return {k: ", ".join(v) for k, v in grouped.items()}
 
 
-def _draw_arrow_head(canv, x1: float, y1: float, x2: float, y2: float, size: float = 7) -> None:
+def _unit(dx: float, dy: float) -> tuple[float, float]:
+    dist = math.hypot(dx, dy) or 1.0
+    return dx / dist, dy / dist
+
+
+def _outward(cx: float, cy: float, x: float, y: float) -> tuple[float, float]:
+    return _unit(x - cx, y - cy)
+
+
+def _draw_arrow_head(canv, x1: float, y1: float, x2: float, y2: float, size: float = 8) -> None:
     angle = math.atan2(y2 - y1, x2 - x1)
-    left = (x2 - size * math.cos(angle - 0.4), y2 - size * math.sin(angle - 0.4))
-    right = (x2 - size * math.cos(angle + 0.4), y2 - size * math.sin(angle + 0.4))
-    canv.setFillColor(INK)
-    canv.drawPath(
-        _path(canv, [(x2, y2), left, right]),
-        fill=1,
-        stroke=0,
-    )
-
-
-def _path(canv, points):
+    left = (x2 - size * math.cos(angle - 0.38), y2 - size * math.sin(angle - 0.38))
+    right = (x2 - size * math.cos(angle + 0.38), y2 - size * math.sin(angle + 0.38))
     p = canv.beginPath()
-    p.moveTo(*points[0])
-    for pt in points[1:]:
-        p.lineTo(*pt)
+    p.moveTo(x2, y2)
+    p.lineTo(*left)
+    p.lineTo(*right)
     p.close()
-    return p
+    canv.setFillColor(INK)
+    canv.drawPath(p, fill=1, stroke=0)
 
 
-def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radius: float = 14) -> None:
+def _label(canv, x: float, y: float, text: str) -> None:
+    canv.setFont("Times-Italic", 10)
+    w = canv.stringWidth(text, "Times-Italic", 10)
+    canv.setFillColor(colors.white)
+    canv.setStrokeColor(colors.white)
+    canv.rect(x - w / 2 - 2.5, y - 2.5, w + 5, 11, fill=1, stroke=0)
+    canv.setFillColor(INK)
+    canv.drawCentredString(x, y, text)
+
+
+def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radius: float = STATE_R) -> None:
     data = normalize_diagram(spec)
     states = data["states"]
-    pos = _layout(states, width, height)
+    pos, (cx, cy) = _layout(states, data["starts"], width, height)
     edges = _group_edges(data["transitions"])
     reverse = {(b, a) for a, b in edges if a != b}
 
+    canv.saveState()
+    clip = canv.beginPath()
+    clip.rect(1, 1, width - 2, height - 2)
+    canv.clipPath(clip, stroke=0)
+
     canv.setStrokeColor(INK)
     canv.setFillColor(INK)
-    canv.setLineWidth(1.1)
+    canv.setLineWidth(1.15)
     canv.setLineCap(1)
     canv.setLineJoin(1)
 
@@ -118,55 +149,68 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
         x1, y1 = pos[src]
         x2, y2 = pos[dst]
         if src == dst:
-            loop_r = radius * 1.15
-            canv.circle(x1, y1 + radius + loop_r * 0.35, loop_r * 0.7, stroke=1, fill=0)
-            _draw_arrow_head(canv, x1 + loop_r * 0.5, y1 + radius + 2, x1 + 4, y1 + radius - 1, 6)
-            canv.setFont("Times-Italic", 9)
-            canv.drawCentredString(x1, y1 + radius + loop_r * 1.15, label)
+            ux, uy = _outward(cx, cy, x1, y1)
+            # Park the loop off the radial so it does not sit on the start arrow.
+            ang = 0.95
+            rx = ux * math.cos(ang) - uy * math.sin(ang)
+            ry = ux * math.sin(ang) + uy * math.cos(ang)
+            offset = radius + LOOP_R + 8
+            lx = x1 + rx * offset
+            ly = y1 + ry * offset
+            canv.setStrokeColor(INK)
+            canv.setLineWidth(1.15)
+            canv.circle(lx, ly, LOOP_R, stroke=1, fill=0)
+            tip_x = x1 + rx * radius
+            tip_y = y1 + ry * radius
+            _draw_arrow_head(canv, lx - rx * 2, ly - ry * 2, tip_x, tip_y, 6)
+            _label(canv, lx + rx * (LOOP_R + 10), ly + ry * (LOOP_R + 10), label)
             continue
-        dx, dy = x2 - x1, y2 - y1
-        dist = math.hypot(dx, dy) or 1.0
-        ux, uy = dx / dist, dy / dist
+
+        ux, uy = _unit(x2 - x1, y2 - y1)
         start = (x1 + ux * radius, y1 + uy * radius)
         end = (x2 - ux * radius, y2 - uy * radius)
-        curved = (dst, src) in reverse or (src, dst) in reverse
-        if curved:
+        mx = (start[0] + end[0]) / 2
+        my = (start[1] + end[1]) / 2
+        paired = (dst, src) in reverse
+        if paired:
             nx, ny = -uy, ux
-            bend = 16
-            mx = (start[0] + end[0]) / 2 + nx * bend
-            my = (start[1] + end[1]) / 2 + ny * bend
-            p = canv.beginPath()
-            p.moveTo(*start)
-            p.curveTo(mx, my, mx, my, *end)
-            canv.drawPath(p, stroke=1, fill=0)
-            _draw_arrow_head(canv, mx, my, end[0], end[1], 6)
-            canv.setFont("Times-Italic", 9)
-            canv.drawCentredString(mx + nx * 8, my + ny * 8, label)
+            bend = 34
         else:
-            canv.line(start[0], start[1], end[0], end[1])
-            _draw_arrow_head(canv, start[0], start[1], end[0], end[1], 6)
-            canv.setFont("Times-Italic", 9)
-            canv.drawCentredString((start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 8, label)
+            nx, ny = _outward(cx, cy, mx, my)
+            bend = 30
+        ctrl = (mx + nx * bend, my + ny * bend)
+        p = canv.beginPath()
+        p.moveTo(*start)
+        p.curveTo(ctrl[0], ctrl[1], ctrl[0], ctrl[1], *end)
+        canv.setStrokeColor(INK)
+        canv.setLineWidth(1.15)
+        canv.drawPath(p, stroke=1, fill=0)
+        _draw_arrow_head(canv, ctrl[0], ctrl[1], end[0], end[1], 7)
+        qx = 0.25 * start[0] + 0.5 * ctrl[0] + 0.25 * end[0]
+        qy = 0.25 * start[1] + 0.5 * ctrl[1] + 0.25 * end[1]
+        _label(canv, qx + nx * 8, qy + ny * 8, label)
 
     for name, (x, y) in pos.items():
         canv.setStrokeColor(INK)
         canv.setFillColor(colors.white)
-        canv.setLineWidth(1.4)
+        canv.setLineWidth(1.5)
         canv.circle(x, y, radius, stroke=1, fill=1)
         if name in data["accept"]:
-            canv.circle(x, y, radius - 3.2, stroke=1, fill=0)
+            canv.circle(x, y, radius - 3.4, stroke=1, fill=0)
         canv.setFillColor(ACCENT)
-        canv.setFont("Times-Bold", 9)
-        canv.drawCentredString(x, y - 3, name)
+        canv.setFont("Times-Bold", 10)
+        canv.drawCentredString(x, y - 3.5, name)
 
     for start_name in data["starts"]:
         if start_name not in pos:
             continue
         x, y = pos[start_name]
         canv.setStrokeColor(INK)
-        canv.setLineWidth(1.2)
-        canv.line(x - radius - 22, y, x - radius, y)
-        _draw_arrow_head(canv, x - radius - 22, y, x - radius, y, 7)
+        canv.setLineWidth(1.3)
+        canv.line(x - radius - START_LEN, y, x - radius, y)
+        _draw_arrow_head(canv, x - radius - START_LEN, y, x - radius, y, 8)
+
+    canv.restoreState()
 
 
 class AutomataDiagram(Flowable):
@@ -174,8 +218,7 @@ class AutomataDiagram(Flowable):
         super().__init__()
         self.spec = spec
         self.diagram_width = width
-        n = len(normalize_diagram(spec)["states"])
-        self.diagram_height = height if height is not None else max(48 * mm, min(90 * mm, 28 * mm + n * 10 * mm))
+        self.diagram_height = height if height is not None else diagram_height(spec, width)
         self.width = width
         self.height = self.diagram_height
 
@@ -184,18 +227,20 @@ class AutomataDiagram(Flowable):
         return self.width, self.height
 
     def draw(self) -> None:
-        self.canv.saveState()
-        self.canv.setStrokeColor(colors.HexColor("#dddddd"))
-        self.canv.setLineWidth(0.4)
-        self.canv.roundRect(0, 0, self.width, self.diagram_height, 4, stroke=1, fill=0)
         caption = normalize_diagram(self.spec)["caption"]
-        graph_h = self.diagram_height - (12 if caption else 0)
+        cap_h = 14 if caption else 0
+        graph_h = self.diagram_height - cap_h
         self.canv.saveState()
-        self.canv.translate(0, 12 if caption else 0)
+        self.canv.setStrokeColor(colors.HexColor("#c8c8c8"))
+        self.canv.setLineWidth(0.5)
+        self.canv.setFillColor(colors.white)
+        self.canv.roundRect(0, 0, self.width, self.diagram_height, 5, stroke=1, fill=1)
+        self.canv.saveState()
+        self.canv.translate(0, cap_h)
         draw_automata(self.canv, self.spec, self.width, graph_h)
         self.canv.restoreState()
         if caption:
-            self.canv.setFillColor(INK)
+            self.canv.setFillColor(colors.HexColor("#333333"))
             self.canv.setFont("Times-Italic", 9)
             self.canv.drawCentredString(self.width / 2, 4, caption)
         self.canv.restoreState()
