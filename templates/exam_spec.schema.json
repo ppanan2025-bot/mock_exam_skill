@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mock exam paper spec",
+  "type": "object",
+  "required": ["meta", "sections"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["course_code", "course_name", "paper_title", "duration", "total_marks"],
+      "properties": {
+        "institution": { "type": "string" },
+        "course_code": { "type": "string" },
+        "course_name": { "type": "string" },
+        "paper_title": { "type": "string" },
+        "sitting": { "type": "string" },
+        "duration": { "type": "string" },
+        "total_marks": { "type": "number" },
+        "permitted_materials": { "type": "string" },
+        "instructions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "questions"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "instructions": { "type": "string" },
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/question" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "question": {
+      "type": "object",
+      "required": ["id", "type", "marks"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": {
+          "enum": ["mcq", "true_false", "short", "long", "calculation", "fill_blank"]
+        },
+        "marks": { "type": "number", "exclusiveMinimum": 0 },
+        "stem": { "type": "string" },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "text"],
+            "properties": {
+              "label": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "stem"],
+            "properties": {
+              "id": { "type": "string" },
+              "stem": { "type": "string" },
+              "marks": { "type": "number" },
+              "answer_lines": { "type": "integer" },
+              "answer": { "type": "string" },
+              "marking_notes": { "type": "string" }
+            }
+          }
+        },
+        "answer_lines": { "type": "integer" },
+        "answer": { "type": "string" },
+        "marking_notes": { "type": "string" }
+      }
+    }
+  }
+}

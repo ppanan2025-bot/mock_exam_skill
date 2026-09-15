@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "institution": "Example University",
+    "course_code": "COMP1099",
+    "course_name": "Introduction to Databases",
+    "paper_title": "Mock Examination Paper",
+    "sitting": "Semester 1, 2026",
+    "duration": "2 hours",
+    "total_marks": 40,
+    "permitted_materials": "Closed book. No calculators.",
+    "instructions": [
+      "Answer all questions.",
+      "Write clearly. Unreadable work may receive no marks.",
+      "Show working for calculation questions."
+    ]
+  },
+  "sections": [
+    {
+      "id": "A",
+      "title": "Short questions",
+      "instructions": "Answer all questions in this section.",
+      "questions": [
+        {
+          "id": "A1",
+          "type": "mcq",
+          "marks": 2,
+          "stem": "Which SQL clause filters groups after aggregation?",
+          "choices": [
+            { "label": "A", "text": "WHERE" },
+            { "label": "B", "text": "HAVING" },
+            { "label": "C", "text": "GROUP BY" },
+            { "label": "D", "text": "ORDER BY" }
+          ],
+          "answer": "B",
+          "marking_notes": "HAVING filters groups; WHERE filters rows before grouping."
+        },
+        {
+          "id": "A2",
+          "type": "true_false",
+          "marks": 2,
+          "stem": "A candidate key is any superkey that is not a proper superset of another candidate key.",
+          "answer": "False",
+          "marking_notes": "A candidate key is a minimal superkey. The stem describes minimality incompletely / incorrectly."
+        },
+        {
+          "id": "A3",
+          "type": "short",
+          "marks": 6,
+          "stem": "Give one advantage and one disadvantage of using a natural join rather than an inner join with an explicit ON condition.",
+          "answer_lines": 4,
+          "answer": "Advantage: less verbose when join columns share names. Disadvantage: accidental joins on extra same-named columns; harder to see intent.",
+          "marking_notes": "2 marks advantage, 2 marks disadvantage, 2 marks for a precise contrast."
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "title": "Longer questions",
+      "questions": [
+        {
+          "id": "B1",
+          "type": "calculation",
+          "marks": 12,
+          "stem": "A relation R(A, B, C, D) has FDs {A → B, B → C, AC → D}.",
+          "parts": [
+            {
+              "id": "a",
+              "marks": 4,
+              "stem": "Compute the closure of A. Show working.",
+              "answer_lines": 4,
+              "answer": "A+ = {A, B, C, D}",
+              "marking_notes": "Start from A; add B; then C via B → C; then D via AC → D."
+            },
+            {
+              "id": "b",
+              "marks": 8,
+              "stem": "State whether A is a candidate key, and explain using your closure.",
+              "answer_lines": 5,
+              "answer": "Yes. A+ contains all attributes of R, and no proper subset of A exists.",
+              "marking_notes": "4 marks for using A+ = R; 4 marks for minimality / candidate-key definition."
+            }
+          ]
+        },
+        {
+          "id": "B2",
+          "type": "long",
+          "marks": 18,
+          "stem": "A clinic stores Patient(pid, name, dob) and Appointment(aid, pid, when, room). A patient may have many appointments.",
+          "answer_lines": 10,
+          "parts": [
+            {
+              "id": "a",
+              "marks": 8,
+              "stem": "Write SQL to list each patient's name and the number of appointments they have, including patients with none.",
+              "answer_lines": 6,
+              "answer": "SELECT p.name, COUNT(a.aid) AS n FROM Patient p LEFT JOIN Appointment a ON p.pid = a.pid GROUP BY p.pid, p.name;",
+              "marking_notes": "LEFT JOIN required; COUNT on appointment key not *; GROUP BY patient identity."
+            },
+            {
+              "id": "b",
+              "marks": 10,
+              "stem": "Explain two integrity constraints you would declare, and one anomaly that appears if they are omitted.",
+              "answer_lines": 8,
+              "answer": "FK Appointment.pid → Patient.pid; PK on Appointment.aid (and maybe UNIQUE(pid, when)). Without FK, orphan appointments; without keys, duplicate identity rows.",
+              "marking_notes": "5 marks for two plausible constraints; 5 marks for a matching anomaly."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
