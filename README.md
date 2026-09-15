@@ -22,7 +22,7 @@ hermes skills install https://github.com/ppanan2025-bot/mock_exam_skill
 
 Then, in a session that has the skills toolset:
 
-> Generate a 2-hour mock exam from my lecture slides.
+> Generate a same format mock exam from my lecture slides.
 
 ## Stored materials (Hetzner / host disk)
 
