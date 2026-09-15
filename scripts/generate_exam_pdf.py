@@ -20,8 +20,6 @@ try:
         Flowable,
         HRFlowable,
         KeepTogether,
-        ListFlowable,
-        ListItem,
         Paragraph,
         SimpleDocTemplate,
         Spacer,
@@ -40,6 +38,10 @@ RIGHT = 18 * mm
 TOP = 16 * mm
 BOTTOM = 16 * mm
 CONTENT_W = PAGE_W - LEFT - RIGHT
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
@@ -246,20 +248,24 @@ def _question_heading(qid: str, marks: Any, styles: dict[str, ParagraphStyle]) -
     return table
 
 
-def _choices(choices: list[dict[str, Any]], styles: dict[str, ParagraphStyle]) -> ListFlowable:
-    items = []
+def _choices(choices: list[dict[str, Any]], styles: dict[str, ParagraphStyle]) -> list[Any]:
+    """Render MCQ options as (A) text — never ListFlowable (Times has no bullet glyph)."""
+    lines: list[Any] = [Spacer(1, 1.5 * mm)]
     for choice in choices:
         label = str(choice.get("label") or "").strip()
         text = str(choice.get("text") or "").strip()
-        body = f"{label}. {text}" if label else text
-        items.append(ListItem(_p(body, styles["choice"]), leftIndent=12, value="bullet"))
-    return ListFlowable(items, bulletType="bullet", start="circle", leftIndent=18, spaceBefore=2, spaceAfter=2)
+        body = f"({label})  {text}" if label else text
+        lines.append(_p(body, styles["choice"]))
+        lines.append(Spacer(1, 0.8 * mm))
+    return lines
 
 
 def _answer_space(question: dict[str, Any], styles: dict[str, ParagraphStyle]) -> Flowable | None:
     qtype = str(question.get("type") or "")
-    if qtype in {"mcq", "true_false"}:
-        return _p("Answer: ______________", styles["small"])
+    if qtype == "mcq":
+        return _p("Circle one:  (A)    (B)    (C)    (D)", styles["small"])
+    if qtype == "true_false":
+        return _p("Circle one:  True    /    False", styles["small"])
     n = question.get("answer_lines")
     if not isinstance(n, int):
         n = 8 if qtype == "long" else 3 if qtype == "short" else 6 if qtype == "calculation" else 2
@@ -277,8 +283,15 @@ def _question_flowables(
         bits.append(Spacer(1, 2 * mm))
         bits.append(_p(stem, styles["stem"]))
     qtype = str(question.get("type") or "")
+    diagram = question.get("diagram")
+    if isinstance(diagram, dict) and (diagram.get("states") or diagram.get("transitions")):
+        from automata_diagram import AutomataDiagram
+
+        bits.append(Spacer(1, 2 * mm))
+        bits.append(AutomataDiagram(diagram, CONTENT_W))
+        bits.append(Spacer(1, 2 * mm))
     if qtype == "mcq" and question.get("choices"):
-        bits.append(_choices(question["choices"], styles))
+        bits.extend(_choices(question["choices"], styles))
     elif qtype == "true_false":
         bits.append(_p("Circle one:  True    /    False", styles["choice"]))
     for part in question.get("parts") or []:
@@ -314,7 +327,8 @@ def _question_flowables(
             if space is not None:
                 bits.append(space)
     bits.append(Spacer(1, 3 * mm))
-    if qtype in {"mcq", "true_false", "short", "fill_blank"}:
+    has_diagram = isinstance(question.get("diagram"), dict)
+    if qtype in {"mcq", "true_false", "short", "fill_blank"} and not has_diagram:
         return [KeepTogether(bits)]
     return bits
 
@@ -345,14 +359,9 @@ def build_story(spec: dict[str, Any], answers: bool) -> list[Any]:
         "Show working for calculation questions.",
     ]
     story.append(_p("Instructions", styles["h_section"]))
-    story.append(
-        ListFlowable(
-            [ListItem(_p(str(item), styles["body"]), leftIndent=8) for item in instructions],
-            bulletType="bullet",
-            start="disc",
-            leftIndent=14,
-        )
-    )
+    for i, item in enumerate(instructions, 1):
+        story.append(_p(f"{i}.  {item}", styles["body"]))
+        story.append(Spacer(1, 0.6 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#222222"), spaceBefore=6, spaceAfter=6))
 
     for si, section in enumerate(spec.get("sections") or []):

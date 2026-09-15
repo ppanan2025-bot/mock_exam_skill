@@ -50,19 +50,32 @@ Helpers:
 | `scripts/extract_materials.py` | Text from PDF / PPTX / DOCX / markdown |
 | `scripts/validate_exam_spec.py` | JSON spec checks |
 | `scripts/generate_exam_pdf.py` | Student paper or `--answers` key |
+| `scripts/render_graph.py` | Standalone DFA/NFA/graph PDF |
 
 ```bash
 python -m pip install -r requirements.txt
-python scripts/generate_exam_pdf.py templates/exam_spec.example.json -o /tmp/mock-exam.pdf
+python scripts/generate_exam_pdf.py templates/exam_spec.example.json -o /tmp/mock-exam-paper.pdf
+python scripts/render_graph.py templates/dfa.example.json -o /tmp/dfa.pdf
 ```
+
+## Graph diagrams (second Hermes skill)
+
+This repo also contains `graph-diagram/`, a separate Hermes skill that draws DFA/NFA figures. Copy it onto the host:
+
+```bash
+scp -r graph-diagram root@YOUR_SERVER:~/.hermes/skills/diagrams/graph-diagram
+```
+
+Then start a **new** Hermes session. For automata exam questions, Hermes should set a `diagram` object so the picture is embedded in the mock-exam PDF.
 
 ## Layout
 
 ```
-SKILL.md                 # Hermes instructions
-scripts/                 # extract, validate, render
-templates/               # exam JSON schema + example
-references/              # question design + spec notes
-assets/                  # optional on-host drop folder
+SKILL.md                 # mock-exam Hermes instructions
+graph-diagram/           # DFA/NFA drawing skill
+scripts/                 # extract, validate, render, graphs
+templates/               # exam JSON schema + examples
+references/
+assets/
 examples/
 ```

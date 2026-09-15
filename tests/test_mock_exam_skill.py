@@ -55,6 +55,50 @@ class GenerateExamPdfTests(unittest.TestCase):
             self.assertTrue(key.is_file())
 
 
+class McqLayoutTests(unittest.TestCase):
+    def test_student_paper_has_lettered_choices_not_bullet_glyphs(self) -> None:
+        try:
+            from pypdf import PdfReader
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab/pypdf not installed")
+        from generate_exam_pdf import render
+
+        spec = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            paper = Path(tmp) / "paper.pdf"
+            answers = Path(tmp) / "answers.pdf"
+            render(spec, paper, answers=False)
+            render(spec, answers, answers=True)
+            paper_text = "\n".join((p.extract_text() or "") for p in PdfReader(str(paper)).pages)
+            answers_text = "\n".join((p.extract_text() or "") for p in PdfReader(str(answers)).pages)
+            self.assertIn("(A)", paper_text)
+            self.assertIn("(B)", paper_text)
+            self.assertNotIn("bullAt", paper_text)
+            self.assertNotIn("bullet", paper_text.lower())
+            self.assertNotIn("Marking:", paper_text)
+            self.assertNotIn("Answer: B", paper_text)
+            self.assertIn("Answer:", answers_text)
+            self.assertIn("s0", paper_text)
+
+
+class GraphRenderTests(unittest.TestCase):
+    def test_renders_example_dfa(self) -> None:
+        try:
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab not installed")
+        from render_graph import render_graph_pdf
+
+        spec = json.loads((ROOT / "templates" / "dfa.example.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "dfa.pdf"
+            result = render_graph_pdf(spec, out)
+            self.assertTrue(result["ok"])
+            self.assertTrue(out.is_file())
+            self.assertGreater(out.stat().st_size, 500)
+
+
 class ExtractMaterialsTests(unittest.TestCase):
     def test_markdown_file(self) -> None:
         from extract_materials import extract_one

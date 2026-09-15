@@ -34,8 +34,9 @@ See `templates/exam_spec.schema.json` and `templates/exam_spec.example.json`.
 - `mcq` needs `choices` with unique `label` + `text` (at least two).
 - `true_false` is rendered as True / False; store the key in `answer`.
 - `parts` optional. Each part may have `id`, `stem`, `marks`, `answer_lines`, `answer`, `marking_notes`.
-- `answer` / `marking_notes` are omitted from the student PDF.
+- `answer` / `marking_notes` are omitted from the student PDF. Never pass `--answers` when rendering the student paper.
 - `answer_lines` controls blank lines on the student paper.
+- `diagram` optional DFA/NFA/graph object (see `templates/dfa.example.json`). The renderer draws the machine; do not replace it with a transition sentence.
 
 ## IDs
 
