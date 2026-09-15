@@ -6,7 +6,7 @@
     "paper_title": "Mock Examination Paper",
     "sitting": "Semester 1, 2026",
     "duration": "2 hours",
-    "total_marks": 40,
+    "total_marks": 48,
     "permitted_materials": "Closed book. No calculators.",
     "instructions": [
       "Answer all questions.",
@@ -50,6 +50,30 @@
           "answer_lines": 4,
           "answer": "Advantage: less verbose when join columns share names. Disadvantage: accidental joins on extra same-named columns; harder to see intent.",
           "marking_notes": "2 marks advantage, 2 marks disadvantage, 2 marks for a precise contrast."
+        },
+        {
+          "id": "A4",
+          "type": "short",
+          "marks": 8,
+          "stem": "The DFA below has start state s0 and unique accept state s2. What language over {a, b} does it recognise? Justify by explaining the role of each state.",
+          "answer_lines": 6,
+          "diagram": {
+            "kind": "dfa",
+            "caption": "DFA over {a, b}",
+            "states": ["s0", "s1", "s2"],
+            "start": "s0",
+            "accept": ["s2"],
+            "transitions": [
+              {"from": "s0", "symbol": "a", "to": "s0"},
+              {"from": "s0", "symbol": "b", "to": "s1"},
+              {"from": "s1", "symbol": "a", "to": "s0"},
+              {"from": "s1", "symbol": "b", "to": "s2"},
+              {"from": "s2", "symbol": "a", "to": "s2"},
+              {"from": "s2", "symbol": "b", "to": "s2"}
+            ]
+          },
+          "answer": "Strings over {a,b} that contain at least two consecutive b's (equivalently, contain the factor bb). s0: no trailing b; s1: ends with a single b; s2: has seen bb.",
+          "marking_notes": "4 marks for a correct language; 4 marks for a coherent state invariant."
         }
       ]
     },

@@ -1,14 +1,14 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials.
-version: 0.1.0
+version: 0.2.0
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [exam, education, pdf, mock-exam, assessment]
-    related_skills: [pdf]
+    tags: [exam, education, pdf, mock-exam, assessment, automata]
+    related_skills: [pdf, graph-diagram]
     config:
       - key: mock_exam_skill.materials_dir
         description: Host folder of stored slides, past papers, and tutorials
@@ -46,7 +46,7 @@ Use the `terminal` tool. `${HERMES_SKILL_DIR}` is the installed skill directory.
 ```
 terminal(command="python ${HERMES_SKILL_DIR}/scripts/extract_materials.py PATH [PATH ...]", timeout=120)
 terminal(command="python ${HERMES_SKILL_DIR}/scripts/validate_exam_spec.py exam.json", timeout=30)
-terminal(command="python ${HERMES_SKILL_DIR}/scripts/generate_exam_pdf.py exam.json -o /tmp/mock-exam.pdf", timeout=60)
+terminal(command="python ${HERMES_SKILL_DIR}/scripts/generate_exam_pdf.py exam.json -o /tmp/mock-exam-paper.pdf", timeout=60)
 terminal(command="python ${HERMES_SKILL_DIR}/scripts/generate_exam_pdf.py exam.json -o /tmp/mock-exam-answers.pdf --answers", timeout=60)
 ```
 
@@ -58,8 +58,9 @@ Helpers print JSON to stdout and exit non-zero on failure.
 |---|---|
 | Extract slides / papers / tutorials | `extract_materials.py <files-or-dirs>` |
 | Check spec | `validate_exam_spec.py exam.json` |
-| Student paper PDF | `generate_exam_pdf.py exam.json -o paper.pdf` |
+| Student paper PDF | `generate_exam_pdf.py exam.json -o paper.pdf`  **no** `--answers` |
 | Marking key PDF | `generate_exam_pdf.py exam.json -o answers.pdf --answers` |
+| DFA / NFA figure | question field `diagram` (see `graph-diagram` skill and `templates/dfa.example.json`) |
 | Spec shape | `templates/exam_spec.schema.json`, `templates/exam_spec.example.json` |
 | Pedagogy | `references/question-design.md` |
 
@@ -69,10 +70,10 @@ Helpers print JSON to stdout and exit non-zero on failure.
 2. **Extract.** `terminal(command="python ${HERMES_SKILL_DIR}/scripts/extract_materials.py …", timeout=120)`. Read the JSON with `read_file` (or stdout). Skip `skipped` / `error` records. If `likely_scanned` is true, rasterise or use `vision_analyze` / the `pdf` skill OCR path; do not treat empty text as "this deck has no content". For images (`.png`/`.jpg`), use `vision_analyze`.
 3. **Blueprint.** From the extracts, list taught topics, typical question styles, and a marks × time plan. Follow `references/question-design.md`. Completion: every requested topic is assigned marks, and total marks match the agreed duration.
 4. **Author original questions.** Write new stems. Match course notation. Fill `answer` and `marking_notes` for every item. Completion: no stem is a paraphrase of a single source question.
-5. **Write spec JSON** with `write_file` using `templates/exam_spec.example.json` as the shape (`references/exam-spec.md`). IDs unique. MCQ has ≥2 choices. Part marks sum to the parent. `meta.total_marks` equals the question sum.
+5. **Write spec JSON** with `write_file` using `templates/exam_spec.example.json` as the shape (`references/exam-spec.md`). IDs unique. MCQ has ≥2 choices. Part marks sum to the parent. `meta.total_marks` equals the question sum. If the item is about a DFA/NFA, put a `diagram` object on the question — do not leave the machine as a `s0 --a--> s1` sentence. Load `graph-diagram` if you need a standalone figure first.
 6. **Validate.** `terminal(command="python ${HERMES_SKILL_DIR}/scripts/validate_exam_spec.py exam.json", timeout=30)`. Fix every error; do not render until `"ok": true`.
-7. **Render.** Write the student paper under `/tmp/` (or the session output dir). Optionally render `--answers` as a second PDF. Completion: command JSON has `"ok": true` and a real `path`.
-8. **Deliver.** In the reply, state course, duration, total marks, and the absolute PDF path(s). Put `[[as_document]]` on its own last line so the gateway attaches the files.
+7. **Render two files.** Student paper **without** `--answers` to a name containing `paper`. Answer key **with** `--answers` to a **different** file containing `answers`. Never give the user only the answers PDF as the exam. Never pass `--answers` when writing the student paper. Completion: both JSON results have `"ok": true`.
+8. **Deliver.** In the reply, state course, duration, total marks, and both absolute PDF paths. Put `[[as_document]]` on its own last line.
 
 ## Pitfalls
 
@@ -80,7 +81,9 @@ Helpers print JSON to stdout and exit non-zero on failure.
 - **Hub installs** copy files named from this SKILL.md (`scripts/`, `templates/`, `references/`, `assets/README.md`, `examples/`). Large slide decks belong in `materials_dir` on the host, not in a public GitHub repo.
 - **Scanned PDFs / photo slides** need vision/OCR; `extract_materials.py` will report empty text.
 - **Math** is Unicode in the PDF, not LaTeX. Avoid `$...$` markup.
-- **Answer key** must not be merged into the student paper unless the user asked for worked solutions on the same document.
+- **MCQ layout:** never use reportlab `ListFlowable` / markdown bullets for options. `generate_exam_pdf.py` prints `(A) …`. If you hand-build a PDF, use the same `(A)` form.
+- **Answer key** must not be merged into the student paper. `--answers` is only for the second file.
+- **Automata:** if the question needs a DFA/NFA, set `diagram` and let the renderer draw it. Do not ask the student to decode a long transition sentence instead of a picture.
 - If `reportlab` / `pypdf` are missing, install from `${HERMES_SKILL_DIR}/requirements.txt` and retry — do not hand-write a one-off PDF script.
 
 ## Verification
@@ -88,5 +91,5 @@ Helpers print JSON to stdout and exit non-zero on failure.
 - `validate_exam_spec.py` prints `"ok": true`.
 - `generate_exam_pdf.py` prints `"ok": true` and `pages` ≥ 1.
 - Open or `read_file` is the wrong check for a binary PDF; confirm the file exists (`terminal` `test -f`) and mention the absolute path in the reply.
-- Spot-check: marks sum, no `answer` text on the student paper, questions are original relative to the extracts.
+- Spot-check the student PDF: marks sum; options look like `(A)` not `bullAt`; no `Answer:` / `Marking:` lines; DFA questions show a state diagram.
 - Optional: if the `pdf` skill is loaded, `pdf_read.py paper.pdf --text` should contain the course code and Question A1 (or the first id).

@@ -1,0 +1,15 @@
+{
+  "kind": "dfa",
+  "caption": "DFA over {a, b} that accepts strings ending in bb",
+  "states": ["s0", "s1", "s2"],
+  "start": "s0",
+  "accept": ["s2"],
+  "transitions": [
+    {"from": "s0", "symbol": "a", "to": "s0"},
+    {"from": "s0", "symbol": "b", "to": "s1"},
+    {"from": "s1", "symbol": "a", "to": "s0"},
+    {"from": "s1", "symbol": "b", "to": "s2"},
+    {"from": "s2", "symbol": "a", "to": "s2"},
+    {"from": "s2", "symbol": "b", "to": "s2"}
+  ]
+}

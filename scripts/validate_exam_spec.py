@@ -102,6 +102,12 @@ def validate(spec: dict[str, Any]) -> list[str]:
                         labels.append(str(choice.get("label") or "").strip())
                     if labels and len(set(labels)) != len(labels):
                         _err(errors, f"{qloc} choice labels must be unique")
+            diagram = q.get("diagram")
+            if diagram is not None:
+                if not isinstance(diagram, dict):
+                    _err(errors, f"{qloc}.diagram must be an object")
+                elif not (diagram.get("transitions") or diagram.get("states")):
+                    _err(errors, f"{qloc}.diagram needs states or transitions")
             if qtype == "true_false" and q.get("choices") not in (None, []):
                 pass
             parts = q.get("parts")

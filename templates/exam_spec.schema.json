@@ -80,7 +80,20 @@
         },
         "answer_lines": { "type": "integer" },
         "answer": { "type": "string" },
-        "marking_notes": { "type": "string" }
+        "marking_notes": { "type": "string" },
+        "diagram": { "$ref": "#/$defs/diagram" }
+      }
+    },
+    "diagram": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["dfa", "nfa", "graph"] },
+        "caption": { "type": "string" },
+        "states": { "type": "array", "items": { "type": "string" } },
+        "start": { "type": "string" },
+        "starts": { "type": "array", "items": { "type": "string" } },
+        "accept": { "type": "array", "items": { "type": "string" } },
+        "transitions": { "type": "array" }
       }
     }
   }
