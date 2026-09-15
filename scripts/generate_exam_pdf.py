@@ -287,9 +287,9 @@ def _question_flowables(
     if isinstance(diagram, dict) and (diagram.get("states") or diagram.get("transitions")):
         from automata_diagram import AutomataDiagram
 
-        bits.append(Spacer(1, 2 * mm))
+        bits.append(Spacer(1, 5 * mm))
         bits.append(AutomataDiagram(diagram, CONTENT_W))
-        bits.append(Spacer(1, 2 * mm))
+        bits.append(Spacer(1, 5 * mm))
     if qtype == "mcq" and question.get("choices"):
         bits.extend(_choices(question["choices"], styles))
     elif qtype == "true_false":
