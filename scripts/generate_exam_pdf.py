@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import sys
 from pathlib import Path
@@ -43,13 +42,24 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from exam_fonts import body_font, ensure_exam_font, italic_font
+from exam_text import format_exam_text
+
 
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
-    cleaned = html.escape(text).replace("\n", "<br/>")
-    return Paragraph(cleaned, style)
+    markup = format_exam_text(text)
+    ital = italic_font()
+    roman = body_font()
+    markup = markup.replace("<i>", f'<font name="{ital}">').replace("</i>", "</font>")
+    for char in "≥≤≠∈∪∩∅→εΣσδΔ":
+        markup = markup.replace(char, f'<font name="{roman}">{char}</font>')
+    return Paragraph(markup, style)
 
 
 def _styles() -> dict[str, ParagraphStyle]:
+    ensure_exam_font()
+    serif = body_font()
+    ital = italic_font()
     base = getSampleStyleSheet()
     return {
         "institution": ParagraphStyle(
@@ -73,7 +83,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "subtitle": ParagraphStyle(
             "subtitle",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=11,
             leading=14,
             alignment=TA_CENTER,
@@ -82,7 +92,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "meta": ParagraphStyle(
             "meta",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=10,
             leading=13,
         ),
@@ -98,7 +108,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "body": ParagraphStyle(
             "body",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=11,
             leading=15,
             alignment=TA_JUSTIFY,
@@ -106,7 +116,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "stem": ParagraphStyle(
             "stem",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=11,
             leading=15,
         ),
@@ -121,14 +131,14 @@ def _styles() -> dict[str, ParagraphStyle]:
         "choice": ParagraphStyle(
             "choice",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=11,
             leading=14,
         ),
         "small": ParagraphStyle(
             "small",
             parent=base["Normal"],
-            fontName="Times-Italic",
+            fontName=ital,
             fontSize=9,
             leading=12,
             textColor=colors.HexColor("#333333"),
@@ -136,7 +146,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "footer": ParagraphStyle(
             "footer",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=8,
             leading=10,
             alignment=TA_CENTER,
@@ -144,7 +154,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "answer": ParagraphStyle(
             "answer",
             parent=base["Normal"],
-            fontName="Times-Roman",
+            fontName=serif,
             fontSize=10,
             leading=13,
         ),

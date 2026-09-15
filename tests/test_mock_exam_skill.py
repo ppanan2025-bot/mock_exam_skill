@@ -13,6 +13,21 @@ EXAMPLE = ROOT / "templates" / "exam_spec.example.json"
 sys.path.insert(0, str(SCRIPTS))
 
 from validate_exam_spec import validate  # noqa: E402
+from exam_text import format_exam_text  # noqa: E402
+
+
+class ExamTextTests(unittest.TestCase):
+    def test_superscripts_and_geq(self) -> None:
+        out = format_exam_text("{a^n b^n : n >= 0}")
+        self.assertIn("<super>", out)
+        self.assertIn("≥", out)
+        self.assertNotIn("^n", out)
+        self.assertNotIn(">=", out)
+        self.assertIn("<i>a</i>", out)
+
+    def test_kleene_star(self) -> None:
+        out = format_exam_text("L2 = a*")
+        self.assertIn("<super>*</super>", out)
 
 
 class ValidateExamSpecTests(unittest.TestCase):
