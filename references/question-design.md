@@ -23,7 +23,7 @@ Use sources to learn the course, not to copy it.
 - Build a short blueprint before writing items: topic × marks × type.
 - Prefer breadth across lectures over many items on the last slide deck.
 - Include at least one question that needs combining two ideas from different weeks when the materials support it.
-- Match the course's language (variable names, theorem titles). Put math in Unicode (≤, ∈, Σ) rather than LaTeX.
+- Match the course's language (variable names, theorem titles). Write exponents as `a^n` or `a^{n}` and inequalities as `>=` / `<=` (the PDF renderer turns these into superscripts and ≥ ≤). Do not leave a visible caret in the intended print form.
 
 ## Marks and time
 

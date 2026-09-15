@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials.
-version: 0.3.0
+version: 0.3.1
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -32,6 +32,7 @@ Do not use this skill to grade students, solve a live sit exam, or emit a pixel-
 
 - Python 3.10+
 - `python -m pip install -r ${HERMES_SKILL_DIR}/requirements.txt` (`reportlab`, `pypdf`)
+- A Unicode serif font so ≥ ≤ print (macOS Times New Roman, or on the Hetzner host `apt install fonts-dejavu-core`)
 - Course materials from **one or more** of:
   1. Files the user sends in this session
   2. `mock_exam_skill.materials_dir` from skill config (preferred on a Hetzner Hermes host)
@@ -80,7 +81,7 @@ Helpers print JSON to stdout and exit non-zero on failure.
 - **Copying source items** is a failure even if wording changed slightly. New scenario + new numbers.
 - **Hub installs** copy files named from this SKILL.md (`scripts/`, `templates/`, `references/`, `assets/README.md`, `examples/`). Large slide decks belong in `materials_dir` on the host, not in a public GitHub repo.
 - **Scanned PDFs / photo slides** need vision/OCR; `extract_materials.py` will report empty text.
-- **Math** is Unicode in the PDF, not LaTeX. Avoid `$...$` markup.
+- **Math:** write `a^n` / `a^{n}` and `>=` / `<=` in the JSON. `generate_exam_pdf.py` renders superscripts and ≥ ≤. Do not write the caret as the printed exponent (`a^n` as three characters). Avoid `$...$` LaTeX.
 - **MCQ layout:** never use reportlab `ListFlowable` / markdown bullets for options. `generate_exam_pdf.py` prints `(A) …`. If you hand-build a PDF, use the same `(A)` form.
 - **Answer key** must not be merged into the student paper. `--answers` is only for the second file.
 - **Automata:** if the question needs a DFA/NFA, set `diagram` and let the renderer draw it. Do not ask the student to decode a long transition sentence instead of a picture.

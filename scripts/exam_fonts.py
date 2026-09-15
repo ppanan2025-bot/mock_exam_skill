@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Register a Unicode serif so ≥, ≤, superscripts look like exam handwriting/print."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+_FAMILY = "ExamSerif"
+_REGISTERED = False
+
+_PAIRS = (
+    (
+        Path("/System/Library/Fonts/Supplemental/Times New Roman.ttf"),
+        Path("/System/Library/Fonts/Supplemental/Times New Roman Italic.ttf"),
+    ),
+    (
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf"),
+    ),
+    (
+        Path("/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf"),
+    ),
+    (
+        Path("/usr/share/fonts/truetype/freefont/FreeSerif.ttf"),
+        Path("/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf"),
+    ),
+    (
+        Path("/System/Library/Fonts/Supplemental/STIXTwoText.ttf"),
+        Path("/System/Library/Fonts/Supplemental/STIXTwoText-Italic.ttf"),
+    ),
+)
+
+
+def body_font() -> str:
+    ensure_exam_font()
+    names = set(pdfmetrics.getRegisteredFontNames())
+    return _FAMILY if _FAMILY in names else "Times-Roman"
+
+
+def italic_font() -> str:
+    ensure_exam_font()
+    names = set(pdfmetrics.getRegisteredFontNames())
+    italic = f"{_FAMILY}-Italic"
+    return italic if italic in names else "Times-Italic"
+
+
+def ensure_exam_font() -> str:
+    global _REGISTERED
+    if _REGISTERED:
+        names = set(pdfmetrics.getRegisteredFontNames())
+        return _FAMILY if _FAMILY in names else "Times-Roman"
+    _REGISTERED = True
+    for regular, italic in _PAIRS:
+        if not regular.is_file():
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont(_FAMILY, str(regular)))
+            if italic.is_file():
+                pdfmetrics.registerFont(TTFont(f"{_FAMILY}-Italic", str(italic)))
+                pdfmetrics.registerFontFamily(
+                    _FAMILY,
+                    normal=_FAMILY,
+                    italic=f"{_FAMILY}-Italic",
+                    bold=_FAMILY,
+                    boldItalic=f"{_FAMILY}-Italic",
+                )
+            else:
+                pdfmetrics.registerFontFamily(
+                    _FAMILY,
+                    normal=_FAMILY,
+                    italic=_FAMILY,
+                    bold=_FAMILY,
+                    boldItalic=_FAMILY,
+                )
+            return _FAMILY
+        except Exception:
+            continue
+    return "Times-Roman"
