@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials.
-version: 0.2.1
+version: 0.3.0
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]

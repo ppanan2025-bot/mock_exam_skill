@@ -98,28 +98,31 @@ class GraphRenderTests(unittest.TestCase):
             self.assertTrue(out.is_file())
             self.assertGreater(out.stat().st_size, 500)
 
-    def test_nfa_with_loops_gets_a_tall_box(self) -> None:
+    def test_nfa_with_loops_stays_compact(self) -> None:
         from automata_diagram import AutomataDiagram, diagram_height
+        from reportlab.lib.units import mm
 
         spec = {
             "kind": "nfa",
-            "caption": "NFA for Question A6",
-            "states": ["q0", "q1", "q2"],
+            "caption": "NFA for Question D1",
+            "states": ["q0", "q1", "q2", "q3"],
             "start": "q0",
-            "accept": ["q2"],
+            "accept": ["q3"],
             "transitions": [
-                ["q0", "a", "q0"],
-                ["q0", "b", "q1"],
+                ["q0", "a", "q1"],
                 ["q0", "b", "q2"],
+                ["q1", "a", "q1"],
                 ["q1", "b", "q1"],
-                ["q1", "a", "q2"],
-                ["q2", "a", "q0"],
+                ["q1", "b", "q3"],
+                ["q2", "a", "q3"],
+                ["q2", "b", "q2"],
             ],
         }
         height = diagram_height(spec)
-        self.assertGreaterEqual(height, 90)
+        self.assertLessEqual(height, 75 * mm)
         box = AutomataDiagram(spec, 400)
-        self.assertGreaterEqual(box.height, 90)
+        self.assertLessEqual(box.height, 80 * mm)
+        self.assertGreater(box.height, 28 * mm)
 
 
 class ExtractMaterialsTests(unittest.TestCase):
