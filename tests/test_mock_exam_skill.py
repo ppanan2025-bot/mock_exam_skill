@@ -97,6 +97,42 @@ class McqLayoutTests(unittest.TestCase):
             self.assertIn("s0", paper_text)
 
 
+class CodeListingTests(unittest.TestCase):
+    def test_normalize_preserves_indent(self) -> None:
+        from code_block import normalize_code
+
+        lines = normalize_code(
+            "target = left\nif right:\n    while right <= target:\n        target = target - right"
+        )
+        self.assertEqual(lines[0], "target = left")
+        self.assertEqual(lines[1], "if right:")
+        self.assertTrue(lines[2].startswith("    while"))
+        self.assertTrue(lines[3].startswith("        target"))
+
+    def test_macro_example_is_boxed_not_one_sentence(self) -> None:
+        try:
+            from pypdf import PdfReader
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab/pypdf not installed")
+        from generate_exam_pdf import render
+        from validate_exam_spec import validate
+
+        spec = json.loads((ROOT / "templates" / "macro.example.json").read_text(encoding="utf-8"))
+        self.assertEqual(validate(spec), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            paper = Path(tmp) / "paper.pdf"
+            render(spec, paper, answers=False)
+            text = "\n".join((p.extract_text() or "") for p in PdfReader(str(paper)).pages)
+            self.assertIn("target = left", text)
+            self.assertIn("right <= target", text)
+            self.assertIn("target = target - right", text)
+            self.assertRegex(text, r"\bif\b")
+            self.assertRegex(text, r"\bwhile\b")
+            self.assertNotIn("rem = left; while", text)
+            self.assertIn("Which macro statement", text)
+
+
 class GraphRenderTests(unittest.TestCase):
     def test_renders_example_dfa(self) -> None:
         try:

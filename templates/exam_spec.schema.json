@@ -52,6 +52,8 @@
         },
         "marks": { "type": "number", "exclusiveMinimum": 0 },
         "stem": { "type": "string" },
+        "stem_after": { "type": "string" },
+        "code": { "$ref": "#/$defs/code" },
         "choices": {
           "type": "array",
           "items": {
@@ -67,10 +69,12 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "stem"],
+            "required": ["id"],
             "properties": {
               "id": { "type": "string" },
               "stem": { "type": "string" },
+              "stem_after": { "type": "string" },
+              "code": { "$ref": "#/$defs/code" },
               "marks": { "type": "number" },
               "answer_lines": { "type": "integer" },
               "answer": { "type": "string" },
@@ -83,6 +87,21 @@
         "marking_notes": { "type": "string" },
         "diagram": { "$ref": "#/$defs/diagram" }
       }
+    },
+    "code": {
+      "description": "Macro / pseudocode listing. Prefer a multiline string with 4-space indent.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } },
+        {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "source": { "type": "string" },
+            "lines": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
     },
     "diagram": {
       "type": "object",

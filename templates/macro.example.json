@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "institution": "Example University",
+    "course_code": "COMP1099",
+    "course_name": "Foundations of Computing",
+    "paper_title": "Mock Examination Paper",
+    "sitting": "Semester 1, 2026",
+    "duration": "1 hour",
+    "total_marks": 2,
+    "permitted_materials": "Closed book."
+  },
+  "sections": [
+    {
+      "id": "A",
+      "title": "Macros",
+      "questions": [
+        {
+          "id": "A1",
+          "type": "mcq",
+          "marks": 2,
+          "stem": "Consider the macro definition",
+          "code": "target = left\nif right:\n    while right <= target:\n        target = target - right",
+          "stem_after": "Which macro statement does this define?",
+          "choices": [
+            { "label": "A", "text": "rem = left % right" },
+            { "label": "B", "text": "rem = left // right" },
+            { "label": "C", "text": "rem = left * right" },
+            { "label": "D", "text": "rem = right - left" }
+          ],
+          "answer": "A",
+          "marking_notes": "Repeated subtraction of right from a copy of left leaves the remainder."
+        }
+      ]
+    }
+  ]
+}
