@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a DFA, NFA, or directed graph spec to a one-page PDF."""
+"""Render a DFA, NFA, or directed graph spec to a compact PDF figure."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas as pdfcanvas
@@ -16,32 +15,38 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from automata_diagram import draw_automata, normalize_diagram
+from automata_diagram import AutomataDiagram, normalize_diagram
+from reportlab.platypus import SimpleDocTemplate, Spacer, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
 
 
 def render_graph_pdf(spec: dict, output: Path, title: str | None = None) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     data = normalize_diagram(spec)
-    width, height = A4
-    margin = 36
-    canv = pdfcanvas.Canvas(str(output), pagesize=A4)
-    canv.setTitle(title or data.get("caption") or "Graph diagram")
     heading = title or data.get("caption") or (data["kind"].upper() + " diagram")
-    canv.setFont("Times-Bold", 14)
-    canv.drawCentredString(width / 2, height - 40, heading)
-    box_w = width - 2 * margin
-    box_h = height - 110
-    canv.translate(margin, 50)
-    canv.setStrokeColorRGB(0.86, 0.86, 0.86)
-    canv.roundRect(0, 0, box_w, box_h, 6, stroke=1, fill=0)
-    draw_automata(canv, spec, box_w, box_h)
-    canv.save()
+    page_w, page_h = A4
+    fig = AutomataDiagram(spec, page_w - 40 * mm)
+    doc = SimpleDocTemplate(
+        str(output),
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        title=heading,
+        author="graph-diagram",
+    )
+    styles = getSampleStyleSheet()
+    story = [Paragraph(heading, styles["Title"]), Spacer(1, 6 * mm), fig]
+    doc.build(story)
     return {
         "ok": True,
         "path": str(output.resolve()),
         "kind": data["kind"],
         "states": len(data["states"]),
         "transitions": len(data["transitions"]),
+        "size": [round(fig.width, 1), round(fig.height, 1)],
     }
 
 

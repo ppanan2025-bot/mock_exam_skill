@@ -1,7 +1,7 @@
 ---
 name: graph-diagram
 description: Draws DFA, NFA, and labelled directed graphs.
-version: 0.1.0
+version: 0.2.0
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -62,7 +62,8 @@ If that path 404s, retry with the repo `scripts/` directory shown above. The com
 
 - Times/list bullets are unrelated to this skill; still never encode the graph only as markdown bullets.
 - Large machines (>12 states) get crowded on one page — split or ask to focus on a subset.
-- Never draw the automaton with `execute_code` / matplotlib. Always use `render_graph.py` or the exam `diagram` field so labels stay on the arrows and the figure cannot overlap the stem.
+- Never draw the automaton with `execute_code` / matplotlib. Always use `render_graph.py` or the exam `diagram` field.
+- Figures are compact left-to-right textbook automata: no frame around the graph, self-loops sit on the state. If `dot` (Graphviz) is on PATH it is used automatically (`apt install graphviz`).
 - `graph` kind is the same drawer without requiring accept/start, but start arrows are skipped when `starts` is empty.
 
 ## Verification
