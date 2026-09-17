@@ -57,7 +57,7 @@ Example:
 }
 ```
 
-Inside `code`, keep operators as `<=` / `>=` and indent with 4 spaces. Do not put the listing on one line.
+Inside `code`, keep operators as `<=` / `>=` and indent with 4 spaces. Do not put the listing on one line. Choice text must keep `%` and `//` (e.g. `left % right`, `left // right`); do not paraphrase them as "mod" or "integer division".
 
 ## IDs
 

@@ -190,6 +190,9 @@ class CodeListingTests(unittest.TestCase):
             self.assertRegex(text, r"\bwhile\b")
             self.assertNotIn("rem = left; while", text)
             self.assertIn("Which macro statement", text)
+            self.assertIn("left % right", text)
+            self.assertIn("left // right", text)
+            self.assertNotIn("remainder", text.lower())
 
 
 class GraphRenderTests(unittest.TestCase):
