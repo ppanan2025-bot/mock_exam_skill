@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import re
 import shutil
 import subprocess
 from collections import defaultdict, deque
@@ -20,6 +21,54 @@ STATE_R = 13.0
 START_LEN = 18.0
 MAX_W = 150 * mm
 MAX_H = 58 * mm
+
+_TRANS = re.compile(
+    r"\b([A-Za-z][A-Za-z0-9]*)\s*-{1,2}\s*"
+    r"(eps(?:ilon)?|ε|ϵ|[A-Za-z0-9])\s*"
+    r"(?:→|->|-->|>)\s*"
+    r"([A-Za-z][A-Za-z0-9]*)",
+    re.I,
+)
+_EPS = {"eps", "epsilon", "ε", "ϵ"}
+
+
+def _norm_symbol(label: str) -> str:
+    raw = label.strip()
+    if raw.lower() in _EPS:
+        return "ε"
+    return raw
+
+
+def infer_diagram_from_text(*texts: str) -> dict[str, Any] | None:
+    """Build a diagram spec from `q0 -eps→ q1` / `s0 --a--> s1` sentences."""
+    blob = " ".join(str(part or "") for part in texts)
+    hits = _TRANS.findall(blob)
+    if len(hits) < 2:
+        return None
+    transitions = []
+    seen: set[tuple[str, str, str]] = set()
+    states: list[str] = []
+    for src, lab, dst in hits:
+        symbol = _norm_symbol(lab)
+        key = (src, symbol, dst)
+        if key in seen:
+            continue
+        seen.add(key)
+        transitions.append({"from": src, "symbol": symbol, "to": dst})
+        for name in (src, dst):
+            if name not in states:
+                states.append(name)
+    if len(transitions) < 2:
+        return None
+    lower = blob.lower()
+    kind = "nfa" if any(t["symbol"] == "ε" for t in transitions) or "nfa" in lower else "dfa"
+    return {
+        "kind": kind,
+        "states": states,
+        "start": states[0],
+        "accept": [],
+        "transitions": transitions,
+    }
 
 
 def normalize_diagram(raw: dict[str, Any]) -> dict[str, Any]:
