@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials. On Sydney Uni Hermes, visitors upload a paper and the website saves a prompt such as "Give me a mock exam of mid-semester COMP2022"; extra requirements in the same message are applied. Reply with compact exam-json. Do not create skills or emit prompt-json.
-version: 0.5.0
+version: 0.5.1
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -47,11 +47,45 @@ If this session cannot use `terminal` / `write_file` (public website):
 2. If they uploaded a paper, match its style (sections, MCQ vs written, macros, automata). If they clicked a saved prompt, match that sitting (`course_code`, mid-semester vs final) and apply any `Requirements:` plus the rest of the message.
 3. Write **8–12** original questions in **1–2** sections. Keep stems and answers short.
 4. Set `meta.course_code` (e.g. `COMP2022`) and `meta.paper_title` so the site can label the prompt (`Mid-Semester` / `Final`).
-5. Macros go in `code` + `stem_after`, not a one-line stem. DFAs/NFAs go in `diagram`.
-6. Reply with one or two sentences, then a single fence. The website turns it into both PDFs.
+5. Macros go in `code` + `stem_after`, not a one-line stem.
+6. **Automata must be a `diagram` object.** Never write `q0 -eps→ q1` / `s0 --a--> s1` as the only picture. Stem can say “the NFA below”; transitions live in `diagram`.
+7. Reply with one or two sentences, then a single fence. The website turns it into both PDFs.
 
 ```exam-json
-{ "meta": { "course_code": "COMP2022", "paper_title": "Mid-Semester Examination", "duration": "1 hour", "total_marks": 40 }, "sections": [] }
+{
+  "meta": {
+    "course_code": "COMP2022",
+    "paper_title": "Mid-Semester Examination",
+    "duration": "1 hour",
+    "total_marks": 4
+  },
+  "sections": [{
+    "id": "A",
+    "title": "Automata",
+    "questions": [{
+      "id": "A1",
+      "type": "mcq",
+      "marks": 4,
+      "stem": "The NFA below has start state q0. Which transition is added by epsilon-removal before unreachable states are deleted?",
+      "diagram": {
+        "kind": "nfa",
+        "states": ["q0", "q1", "q2", "q3"],
+        "start": "q0",
+        "accept": ["q3"],
+        "transitions": [
+          {"from": "q0", "symbol": "ε", "to": "q1"},
+          {"from": "q1", "symbol": "ε", "to": "q2"},
+          {"from": "q2", "symbol": "a", "to": "q3"}
+        ]
+      },
+      "choices": [
+        {"label": "A", "text": "q0 -a→ q3"},
+        {"label": "B", "text": "q0 -b→ q3"}
+      ],
+      "answer": "A"
+    }]
+  }]
+}
 ```
 
 Shape: `templates/exam_spec.example.json`. Math in JSON as `a^n` and `>=`. MCQ options as `choices` with labels A–D.
@@ -85,7 +119,7 @@ Extract materials → original spec → `validate_exam_spec.py` → two PDFs (`p
 
 - Do not copy source items. A prompt is format only.
 - Guest website: no new skills, no `prompt-json` on upload (the site saves the prompt).
-- Automata: `diagram`. Macros: `code` with 4-space indent; `<=` stays ASCII in code.
+- Automata: always set `diagram`. Never leave the machine as `q0 -eps→ q1` in the stem. Macros: `code` with 4-space indent; `<=` stays ASCII in code.
 - Answer key must not appear on the student paper.
 
 ## Verification

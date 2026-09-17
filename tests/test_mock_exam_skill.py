@@ -97,6 +97,65 @@ class McqLayoutTests(unittest.TestCase):
             self.assertIn("s0", paper_text)
 
 
+class InferredDiagramTests(unittest.TestCase):
+    def test_parses_eps_arrow_sentence(self) -> None:
+        from automata_diagram import infer_diagram_from_text
+
+        spec = infer_diagram_from_text(
+            "An NFA has q0 -eps→ q1, q1 -eps→ q2, q2 -a→ q3, and no other transitions."
+        )
+        assert spec is not None
+        self.assertEqual(spec["kind"], "nfa")
+        self.assertEqual(spec["start"], "q0")
+        symbols = {(t["from"], t["symbol"], t["to"]) for t in spec["transitions"]}
+        self.assertIn(("q0", "ε", "q1"), symbols)
+        self.assertIn(("q2", "a", "q3"), symbols)
+
+    def test_text_only_nfa_still_draws(self) -> None:
+        try:
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab not installed")
+        from generate_exam_pdf import render
+
+        spec = {
+            "meta": {
+                "course_code": "COMP2022",
+                "course_name": "Models of Computation",
+                "paper_title": "Mock",
+                "duration": "1 hour",
+                "total_marks": 1,
+            },
+            "sections": [
+                {
+                    "id": "A",
+                    "title": "Automata",
+                    "questions": [
+                        {
+                            "id": "A10",
+                            "type": "mcq",
+                            "marks": 1,
+                            "stem": (
+                                "An NFA has q0 -eps→ q1, q1 -eps→ q2, q2 -a→ q3, "
+                                "and no other transitions. Which transition is added?"
+                            ),
+                            "choices": [
+                                {"label": "A", "text": "q0 -a→ q3"},
+                                {"label": "B", "text": "q0 -b→ q3"},
+                            ],
+                            "answer": "A",
+                        }
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "paper.pdf"
+            result = render(spec, out, answers=False)
+            self.assertTrue(result["ok"])
+            self.assertGreater(out.stat().st_size, 2000)
+
+
 class CodeListingTests(unittest.TestCase):
     def test_normalize_preserves_indent(self) -> None:
         from code_block import normalize_code

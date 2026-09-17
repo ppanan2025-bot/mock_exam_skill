@@ -45,6 +45,7 @@ if str(_SCRIPTS) not in sys.path:
 from code_block import CodeBlock, looks_like_code_blob
 from exam_fonts import body_font, ensure_exam_font, italic_font
 from exam_text import format_exam_text
+from automata_diagram import AutomataDiagram, infer_diagram_from_text
 
 
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
@@ -283,6 +284,26 @@ def _answer_space(question: dict[str, Any], styles: dict[str, ParagraphStyle]) -
     return AnswerLines(n)
 
 
+def _diagram_spec(item: dict[str, Any]) -> dict[str, Any] | None:
+    diagram = item.get("diagram")
+    if isinstance(diagram, dict) and (diagram.get("states") or diagram.get("transitions")):
+        return diagram
+    inferred = infer_diagram_from_text(
+        str(item.get("stem") or ""),
+        str(item.get("stem_after") or ""),
+    )
+    return inferred
+
+
+def _append_diagram(bits: list[Any], item: dict[str, Any]) -> None:
+    diagram = _diagram_spec(item)
+    if not diagram:
+        return
+    bits.append(Spacer(1, 4 * mm))
+    bits.append(AutomataDiagram(diagram, min(CONTENT_W, 150 * mm)))
+    bits.append(Spacer(1, 3 * mm))
+
+
 def _question_flowables(
     question: dict[str, Any],
     styles: dict[str, ParagraphStyle],
@@ -299,13 +320,7 @@ def _question_flowables(
         bits.append(Spacer(1, 2 * mm))
         bits.append(_p(after, styles["stem"]))
     qtype = str(question.get("type") or "")
-    diagram = question.get("diagram")
-    if isinstance(diagram, dict) and (diagram.get("states") or diagram.get("transitions")):
-        from automata_diagram import AutomataDiagram
-
-        bits.append(Spacer(1, 4 * mm))
-        bits.append(AutomataDiagram(diagram, min(CONTENT_W, 150 * mm)))
-        bits.append(Spacer(1, 3 * mm))
+    _append_diagram(bits, question)
     if qtype == "mcq" and question.get("choices"):
         bits.extend(_choices(question["choices"], styles))
     elif qtype == "true_false":
@@ -322,6 +337,7 @@ def _question_flowables(
         if part_after:
             bits.append(Spacer(1, 1.5 * mm))
             bits.append(_p(part_after, styles["stem"]))
+        _append_diagram(bits, part)
         if not answers:
             n = part.get("answer_lines")
             bits.append(Spacer(1, 1 * mm))
