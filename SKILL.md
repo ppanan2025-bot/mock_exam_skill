@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
-description: Generates original mock exam PDFs from course materials.
-version: 0.3.2
+description: Generates original mock exam PDFs from course materials. On Sydney Uni Hermes, visitors upload a paper and the website saves a prompt such as "Give me a mock exam of mid-semester COMP2022"; extra requirements in the same message are applied. Reply with compact exam-json. Do not create skills or emit prompt-json.
+version: 0.5.0
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -14,85 +14,81 @@ metadata:
         description: Host folder of stored slides, past papers, and tutorials
         default: ""
         prompt: Absolute path to stored course materials (empty = chat uploads + assets/)
+      - key: mock_exam_skill.profiles_dir
+        description: Folder of remembered exam formats (course + sitting)
+        default: ""
+        prompt: Absolute path for saved exam formats (empty = ~/.hermes/skill-data/mock-exam-skill/profiles)
+      - key: mock_exam_skill.prompts_path
+        description: Sydney Uni Hermes prompts.json (sidebar PROMPTS list)
+        default: ""
+        prompt: Path to prompts.json (empty = PROMPTS_PATH env or ~/.hermes/skill-data/mock-exam-skill/prompts.json)
 ---
 
 # Mock Exam Skill
 
-Builds a **new** mock examination paper as a PDF from lecture slides, past mock exams, and/or tutorial questions. Sources may arrive in the chat, or already live on the Hermes host. Questions must be original; the paper is not a photocopy of the materials.
+Builds a **new** mock examination paper from lecture slides, past papers, or tutorials. Questions must be original.
 
-Do not use this skill to grade students, solve a live sit exam, or emit a pixel-perfect replica of an official university template.
+Sydney Uni Hermes shows **Skills** (this skill, graph-diagram) and **Prompts** (one reusable command per exam type). After a visitor uploads a paper, the **website** saves a prompt like `Give me a mock exam of mid-semester COMP2022`. Visitors click it later and may add extras in the same box (`Requirements: 30 minutes, extra DFA practice`). Do **not** add a new skill for each sitting. Do **not** emit `prompt-json` unless they ask to rename or delete a prompt. Guest chats have no shell.
+
+Do not use this skill to grade a live sit exam, copy a past paper, or create/edit skills.
 
 ## When to Use
 
-- The user asks for a mock exam, practice paper, or exam-style PDF.
-- They attach slides, a past paper, or tutorial questions, or those files are stored on the host.
-- Don't use for: copying a past paper with light edits, generating only a question list in chat when they asked for a PDF, or non-exam worksheets.
+- Mock exam / practice paper / exam-style PDF.
+- A sidebar prompt: **Give me a mock exam of mid-semester COMP2022** (or another sitting) plus optional extras.
+- User says an attached paper is what that sitting is like.
+- Don't use for: copying a past paper, worksheets that are not exams, or `skill_manage`.
 
-## Prerequisites
+## Website guest path (Sydney Uni Hermes)
 
-- Python 3.10+
-- `python -m pip install -r ${HERMES_SKILL_DIR}/requirements.txt` (`reportlab`, `pypdf`)
-- A Unicode serif font so ≥ ≤ print (macOS Times New Roman, or on the Hetzner host `apt install fonts-dejavu-core`)
-- Course materials from **one or more** of:
-  1. Files the user sends in this session
-  2. `mock_exam_skill.materials_dir` from skill config (preferred on a Hetzner Hermes host)
-  3. `${HERMES_SKILL_DIR}/assets/` if this skill was cloned as a full directory
+If this session cannot use `terminal` / `write_file` (public website):
 
-Read `references/question-design.md` before writing items. Read `references/exam-spec.md` before writing JSON.
+1. Do **not** call `skills_list`, `skill_view`, `skill_manage`, or `terminal`.
+2. If they uploaded a paper, match its style (sections, MCQ vs written, macros, automata). If they clicked a saved prompt, match that sitting (`course_code`, mid-semester vs final) and apply any `Requirements:` plus the rest of the message.
+3. Write **8–12** original questions in **1–2** sections. Keep stems and answers short.
+4. Set `meta.course_code` (e.g. `COMP2022`) and `meta.paper_title` so the site can label the prompt (`Mid-Semester` / `Final`).
+5. Macros go in `code` + `stem_after`, not a one-line stem. DFAs/NFAs go in `diagram`.
+6. Reply with one or two sentences, then a single fence. The website turns it into both PDFs.
 
-## How to Run
-
-Use the `terminal` tool. `${HERMES_SKILL_DIR}` is the installed skill directory.
-
-```
-terminal(command="python ${HERMES_SKILL_DIR}/scripts/extract_materials.py PATH [PATH ...]", timeout=120)
-terminal(command="python ${HERMES_SKILL_DIR}/scripts/validate_exam_spec.py exam.json", timeout=30)
-terminal(command="python ${HERMES_SKILL_DIR}/scripts/generate_exam_pdf.py exam.json -o /tmp/mock-exam-paper.pdf", timeout=60)
-terminal(command="python ${HERMES_SKILL_DIR}/scripts/generate_exam_pdf.py exam.json -o /tmp/mock-exam-answers.pdf --answers", timeout=60)
+```exam-json
+{ "meta": { "course_code": "COMP2022", "paper_title": "Mid-Semester Examination", "duration": "1 hour", "total_marks": 40 }, "sections": [] }
 ```
 
-Helpers print JSON to stdout and exit non-zero on failure.
+Shape: `templates/exam_spec.example.json`. Math in JSON as `a^n` and `>=`. MCQ options as `choices` with labels A–D.
 
-## Quick Reference
+## Host path (Feishu / owner Hermes with a shell)
 
-| Task | Command |
-|---|---|
-| Extract slides / papers / tutorials | `extract_materials.py <files-or-dirs>` |
-| Check spec | `validate_exam_spec.py exam.json` |
-| Student paper PDF | `generate_exam_pdf.py exam.json -o paper.pdf`  **no** `--answers` |
-| Marking key PDF | `generate_exam_pdf.py exam.json -o answers.pdf --answers` |
-| DFA / NFA figure | question field `diagram` (see `graph-diagram` skill and `templates/dfa.example.json`) |
-| Macro / code box | question field `code` + optional `stem_after` (`templates/macro.example.json`) |
-| Spec shape | `templates/exam_spec.schema.json`, `templates/exam_spec.example.json` |
-| Pedagogy | `references/question-design.md` |
+Python 3.10+, `pip install -r ${HERMES_SKILL_DIR}/requirements.txt`. Unicode serif for ≥ ≤.
 
-## Procedure
+```
+terminal(command="python ${HERMES_SKILL_DIR}/scripts/extract_materials.py PATH --max-chars 8000", timeout=120)
+terminal(command="python ${HERMES_SKILL_DIR}/scripts/exam_profile.py save profile.json", timeout=30)
+terminal(command="python ${HERMES_SKILL_DIR}/scripts/exam_profile.py get 'Give me a mock exam of mid-semester COMP2022'", timeout=30)
+terminal(command="python ${HERMES_SKILL_DIR}/scripts/exam_profile.py render exam.json 'COMP2022 mid-semester' -o /tmp/comp2022-midsem", timeout=60)
+```
 
-1. **Collect sources.** Ask for missing constraints (course code, duration, total marks, closed/open book) only if they were not given. Build a path list from: session attachments, config `mock_exam_skill.materials_dir` if set, then `${HERMES_SKILL_DIR}/assets/`. If none exist, stop and ask the user to send slides, a past mock, or tutorial questions — do not invent a syllabus.
-2. **Extract.** `terminal(command="python ${HERMES_SKILL_DIR}/scripts/extract_materials.py …", timeout=120)`. Read the JSON with `read_file` (or stdout). Skip `skipped` / `error` records. If `likely_scanned` is true, rasterise or use `vision_analyze` / the `pdf` skill OCR path; do not treat empty text as "this deck has no content". For images (`.png`/`.jpg`), use `vision_analyze`.
-3. **Blueprint.** From the extracts, list taught topics, typical question styles, and a marks × time plan. Follow `references/question-design.md`. Completion: every requested topic is assigned marks, and total marks match the agreed duration.
-4. **Author original questions.** Write new stems. Match course notation. Fill `answer` and `marking_notes` for every item. Completion: no stem is a paraphrase of a single source question.
-5. **Write spec JSON** with `write_file` using `templates/exam_spec.example.json` as the shape (`references/exam-spec.md`). IDs unique. MCQ has ≥2 choices. Part marks sum to the parent. `meta.total_marks` equals the question sum. If the item is about a DFA/NFA, put a `diagram` object on the question — do not leave the machine as a `s0 --a--> s1` sentence. Load `graph-diagram` if you need a standalone figure first. If the item is a **macro / pseudocode definition**, put the program in `code` as a **multiline** string with 4-space indent (`if`/`while` on their own lines). Keep `stem` as the English intro only, and put “Which … does this define?” in `stem_after`. Never write `rem = left; while rem >= right: { rem = rem - right }` inside `stem`. See `templates/macro.example.json`.
-6. **Validate.** `terminal(command="python ${HERMES_SKILL_DIR}/scripts/validate_exam_spec.py exam.json", timeout=30)`. Fix every error; do not render until `"ok": true`.
-7. **Render two files.** Student paper **without** `--answers` to a name containing `paper`. Answer key **with** `--answers` to a **different** file containing `answers`. Never give the user only the answers PDF as the exam. Never pass `--answers` when writing the student paper. Completion: both JSON results have `"ok": true`.
-8. **Deliver.** In the reply, state course, duration, total marks, and both absolute PDF paths. Put `[[as_document]]` on its own last line.
+If `mock_exam_skill.prompts_path` or `PROMPTS_PATH` is the website `prompts.json`, `save` upserts a sidebar prompt (`Give me a mock exam of mid-semester COMP2022`). The visitor clicks **Refresh**. Same course+sitting updates in place. Never write a new SKILL.md for that.
+
+### Teach a format
+
+User attaches a paper: “this is what the mid-semester exam of COMP2022 is like.” Extract, infer format only (no stems), `exam_profile.py save`. Confirm the prompt text.
+
+### Generate from a prompt
+
+User clicks or types `Give me a mock exam of mid-semester COMP2022` plus extras. `exam_profile.py get` that phrase. Write **new** questions in the saved shape. Apply extras. `exam_profile.py render` (paper + answers). Do not reread long references.
+
+### Generic mock (no saved sitting)
+
+Extract materials → original spec → `validate_exam_spec.py` → two PDFs (`paper` without `--answers`, `answers` with `--answers`). See `references/question-design.md` and `references/exam-spec.md`.
 
 ## Pitfalls
 
-- **Copying source items** is a failure even if wording changed slightly. New scenario + new numbers.
-- **Hub installs** copy files named from this SKILL.md (`scripts/`, `templates/`, `references/`, `assets/README.md`, `examples/`). Large slide decks belong in `materials_dir` on the host, not in a public GitHub repo.
-- **Scanned PDFs / photo slides** need vision/OCR; `extract_materials.py` will report empty text.
-- **Math:** write `a^n` / `a^{n}` and `>=` / `<=` in the JSON. `generate_exam_pdf.py` renders superscripts and ≥ ≤. Do not write the caret as the printed exponent (`a^n` as three characters). Avoid `$...$` LaTeX.
-- **MCQ layout:** never use reportlab `ListFlowable` / markdown bullets for options. `generate_exam_pdf.py` prints `(A) …`. If you hand-build a PDF, use the same `(A)` form.
-- **Answer key** must not be merged into the student paper. `--answers` is only for the second file.
-- **Automata:** if the question needs a DFA/NFA, set `diagram` and let the renderer draw it. Do not ask the student to decode a long transition sentence instead of a picture.
-- **Macros / code:** never inline a program as one sentence in `stem`. Use `code` (boxed listing) and `stem_after` for the question that follows the box. Indent nested `while`/`if` with 4 spaces. Leave `<=` / `>=` as operators inside `code` (do not rewrite them as prose).
-- If `reportlab` / `pypdf` are missing, install from `${HERMES_SKILL_DIR}/requirements.txt` and retry — do not hand-write a one-off PDF script.
+- Do not copy source items. A prompt is format only.
+- Guest website: no new skills, no `prompt-json` on upload (the site saves the prompt).
+- Automata: `diagram`. Macros: `code` with 4-space indent; `<=` stays ASCII in code.
+- Answer key must not appear on the student paper.
 
 ## Verification
 
-- `validate_exam_spec.py` prints `"ok": true`.
-- `generate_exam_pdf.py` prints `"ok": true` and `pages` ≥ 1.
-- Open or `read_file` is the wrong check for a binary PDF; confirm the file exists (`terminal` `test -f`) and mention the absolute path in the reply.
-- Spot-check the student PDF: marks sum; options look like `(A)` not `bullAt`; no `Answer:` / `Marking:` lines; DFA questions show a state diagram.
-- Optional: if the `pdf` skill is loaded, `pdf_read.py paper.pdf --text` should contain the course code and Question A1 (or the first id).
+- Website: reply contains one `exam-json` fence; `meta.course_code` set; no skill tools.
+- Host: `exam_profile.py render` / `generate_exam_pdf.py` print `"ok": true`. Student PDF has `(A)` not `bullAt`, no `Answer:` lines.

@@ -189,5 +189,81 @@ class ExtractMaterialsTests(unittest.TestCase):
             self.assertIn("3NF", rec["text"])
 
 
+class ExamProfileTests(unittest.TestCase):
+    def test_example_profile_saves_and_matches_phrase(self) -> None:
+        from exam_profile import find_profile, save_profile, sanitize_profile, validate_profile
+
+        raw = json.loads((ROOT / "templates" / "exam_profile.example.json").read_text(encoding="utf-8"))
+        self.assertEqual(validate_profile(raw), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            result = save_profile(raw, Path(tmp), write_prompt=False)
+            self.assertTrue(result["ok"], result)
+            found = find_profile("please give me the mid-semester exam of COMP2022", Path(tmp))
+            self.assertIsNotNone(found)
+            assert found is not None
+            self.assertEqual(found["course_code"], "COMP2022")
+            self.assertEqual(found["exam_kind"], "mid-semester")
+
+    def test_sanitize_drops_question_text(self) -> None:
+        from exam_profile import sanitize_profile, validate_profile
+
+        leaked = {
+            "course_code": "COMP2022",
+            "exam_kind": "mid-semester",
+            "sections": [
+                {
+                    "id": "A",
+                    "questions": [
+                        {
+                            "type": "mcq",
+                            "marks": 2,
+                            "stem": "COPY THIS QUESTION",
+                            "answer": "B",
+                        }
+                    ],
+                }
+            ],
+        }
+        clean = sanitize_profile(leaked)
+        self.assertNotIn("questions", clean["sections"][0])
+        self.assertEqual(clean["sections"][0]["slots"][0]["type"], "mcq")
+        blob = json.dumps(clean)
+        self.assertNotIn("COPY THIS QUESTION", blob)
+        self.assertEqual(validate_profile(clean), [])
+
+    def test_spec_must_follow_saved_section_shape(self) -> None:
+        from exam_profile import spec_matches_profile
+
+        profile = json.loads((ROOT / "templates" / "exam_profile.example.json").read_text(encoding="utf-8"))
+        spec = {
+            "meta": {"course_code": "COMP2022", "total_marks": 40},
+            "sections": [{"id": "A", "questions": [{"type": "mcq"}]}],
+        }
+        errors = spec_matches_profile(spec, profile)
+        self.assertTrue(any("section count" in e for e in errors))
+
+    def test_save_upserts_website_prompt(self) -> None:
+        from exam_profile import save_profile, website_prompt
+
+        raw = json.loads((ROOT / "templates" / "exam_profile.example.json").read_text(encoding="utf-8"))
+        prompt = website_prompt(raw)
+        self.assertEqual(prompt["text"], "Give me a mock exam of mid-semester COMP2022.")
+        self.assertEqual(prompt["name"], "COMP2022 mid-semester")
+        extra = website_prompt(raw, "30 minutes, extra DFA practice")
+        self.assertIn("Requirements: 30 minutes, extra DFA practice", extra["text"])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = save_profile(
+                raw,
+                root / "profiles",
+                prompts_path=root / "prompts.json",
+            )
+            self.assertTrue(result["ok"], result)
+            payload = json.loads((root / "prompts.json").read_text(encoding="utf-8"))
+            texts = [item["text"] for item in payload["prompts"]]
+            self.assertIn("Give me a mock exam of mid-semester COMP2022.", texts)
+            self.assertEqual(result["website_prompt"]["ok"], True)
+
+
 if __name__ == "__main__":
     unittest.main()

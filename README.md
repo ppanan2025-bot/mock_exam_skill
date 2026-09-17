@@ -34,12 +34,18 @@ hermes config set skills.config.mock_exam_skill.materials_dir /home/YOU/course-m
 
 Chat uploads still work for one-off papers.
 
+## Remembered exam formats / website prompts
+
+On **Sydney Uni Hermes**, Skills stay as `mock-exam-skill` and `graph-diagram`. After someone uploads a paper, the **website** adds a **Prompt** such as `Give me a mock exam of mid-semester COMP2022`. Click it, add extras in the same message, and Hermes writes a new paper in that format. Guest chats cannot create skills.
+
+On a host with a shell, `exam_profile.py save` can upsert the same prompt text into `prompts.json` (`PROMPTS_PATH` if the website uses that file). Click **Refresh** on the site.
+
 Do not push copyrighted slides to a public GitHub copy of this repo. If you clone the skill onto the host, you may also drop files in `assets/` (see `assets/README.md`).
 
 ## What Hermes does
 
 1. Reads the materials (or uses the stored folder).
-2. Builds a marks/time blueprint for the course.
+2. Remembers a named exam format if you taught one (e.g. COMP2022 mid-semester).
 3. Writes **new** questions (same topics and style, not copies).
 4. Renders an A4 PDF question paper, and optionally a separate answer key.
 
@@ -48,6 +54,7 @@ Helpers:
 | Script | Role |
 |---|---|
 | `scripts/extract_materials.py` | Text from PDF / PPTX / DOCX / markdown |
+| `scripts/exam_profile.py` | Save / look up / render from a remembered exam format |
 | `scripts/validate_exam_spec.py` | JSON spec checks |
 | `scripts/generate_exam_pdf.py` | Student paper or `--answers` key |
 | `scripts/render_graph.py` | Standalone DFA/NFA/graph PDF |
