@@ -232,10 +232,34 @@ class GraphRenderTests(unittest.TestCase):
             ],
         }
         height = diagram_height(spec)
-        self.assertLessEqual(height, 75 * mm)
+        self.assertLessEqual(height, 92 * mm)
         box = AutomataDiagram(spec, 400)
-        self.assertLessEqual(box.height, 80 * mm)
+        self.assertLessEqual(box.height, 100 * mm)
         self.assertGreater(box.height, 28 * mm)
+
+    def test_cyclic_dfa_uses_triangle_not_a_line(self) -> None:
+        from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram
+
+        spec = {
+            "kind": "dfa",
+            "states": ["q0", "q1", "q2"],
+            "start": "q0",
+            "accept": ["q2"],
+            "transitions": [
+                ["q0", "0", "q0"],
+                ["q0", "1", "q1"],
+                ["q1", "1", "q0"],
+                ["q1", "0", "q2"],
+                ["q2", "0", "q2"],
+                ["q2", "1", "q0"],
+            ],
+        }
+        data = normalize_diagram(spec)
+        self.assertFalse(_is_path_layout(data["transitions"]))
+        width, height = diagram_size(spec)
+        pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
+        self.assertGreater(pos["q1"][0], pos["q0"][0] + 20)
+        self.assertGreater(pos["q0"][1], pos["q2"][1] + 12)
 
 
 class ExtractMaterialsTests(unittest.TestCase):

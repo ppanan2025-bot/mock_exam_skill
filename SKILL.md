@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials. On Sydney Uni Hermes, visitors upload a paper and the website saves a prompt such as "Give me a mock exam of mid-semester COMP2022"; extra requirements in the same message are applied. Reply with compact exam-json. Do not create skills or emit prompt-json.
-version: 0.5.2
+version: 0.5.3
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
