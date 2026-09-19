@@ -292,6 +292,33 @@ class GraphRenderTests(unittest.TestCase):
         both = _group_edges([("q0", "1", "q1"), ("q1", "1", "q0")])
         self.assertEqual(_two_way_pairs(both), {("q0", "q1"), ("q1", "q0")})
 
+    def test_string_dfa_keeps_forward_edges_in_a_row(self) -> None:
+        from automata_diagram import _is_row, _layout, diagram_size, normalize_diagram
+
+        spec = {
+            "kind": "dfa",
+            "states": ["q0", "q1", "q2", "q3"],
+            "start": "q0",
+            "accept": ["q3"],
+            "transitions": [
+                ["q0", "a", "q0"],
+                ["q0", "b", "q1"],
+                ["q1", "a", "q2"],
+                ["q1", "b", "q1"],
+                ["q2", "a", "q0"],
+                ["q2", "b", "q3"],
+                ["q3", "a", "q2"],
+                ["q3", "b", "q1"],
+            ],
+        }
+        data = normalize_diagram(spec)
+        width, height = diagram_size(spec)
+        pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
+        self.assertTrue(_is_row(pos))
+        self.assertLess(pos["q0"][0], pos["q1"][0])
+        self.assertLess(pos["q1"][0], pos["q2"][0])
+        self.assertLess(pos["q2"][0], pos["q3"][0])
+
     def test_cyclic_dfa_uses_triangle_not_a_line(self) -> None:
         from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram
 

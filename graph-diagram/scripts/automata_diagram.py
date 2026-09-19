@@ -246,11 +246,35 @@ def _has_loops(transitions: list[tuple[str, str, str]]) -> bool:
     return any(src == dst for src, _lab, dst in transitions)
 
 
+def _layer_index(
+    states: list[str], starts: list[str], transitions: list[tuple[str, str, str]]
+) -> dict[str, int]:
+    index: dict[str, int] = {}
+    for i, layer in enumerate(_layers(states, starts, transitions)):
+        for name in layer:
+            index[name] = i
+    return index
+
+
+def _max_rtl_hops(
+    states: list[str], starts: list[str], transitions: list[tuple[str, str, str]]
+) -> int:
+    index = _layer_index(states, starts, transitions)
+    hops = 0
+    for src, _lab, dst in transitions:
+        if src == dst or src not in index or dst not in index:
+            continue
+        if index[dst] < index[src]:
+            hops = max(hops, index[src] - index[dst])
+    return hops
+
+
 def _place_layers(
     layers: list[list[str]],
     width: float,
     height: float,
     extra_top: float = 0.0,
+    extra_bottom: float = 0.0,
 ) -> dict[str, tuple[float, float]]:
     n_l = max(1, len(layers))
     n_h = max(1, max((len(layer) for layer in layers), default=1))
@@ -258,7 +282,7 @@ def _place_layers(
     content_h = (n_h - 1) * V_GAP
     min_x = STATE_R + START_LEN + 6
     origin_x = max(min_x, (width - content_w) / 2.0)
-    origin_y = max(STATE_R + 6, (height - extra_top - content_h) / 2.0)
+    origin_y = max(STATE_R + 6 + extra_bottom, extra_bottom + (height - extra_top - extra_bottom - content_h) / 2.0)
     pos: dict[str, tuple[float, float]] = {}
     for li, layer in enumerate(layers):
         x = origin_x + li * H_GAP
@@ -280,13 +304,16 @@ def _layout(
     height: float,
 ) -> dict[str, tuple[float, float]]:
     extra_top = 16.0 if _has_loops(transitions) else 0.0
+    hops = _max_rtl_hops(states, starts, transitions)
+    extra_bottom = (18.0 + 12.0 * hops) if hops else 0.0
+    layers = _layers(states, starts, transitions)
     if len(states) <= 1 or _is_path_layout(transitions):
-        return _place_layers(_layers(states, starts, transitions), width, height, extra_top)
+        return _place_layers(layers, width, height, extra_top, extra_bottom)
 
     start = starts[0] if starts else states[0]
     rest = [s for s in states if s != start]
     if len(states) == 2:
-        return _place_layers([[start], rest], width, height, extra_top)
+        return _place_layers([[start], rest], width, height, extra_top, extra_bottom)
 
     if len(states) == 3:
         partner = next((s for s in rest if s not in accept), rest[0])
@@ -301,7 +328,7 @@ def _layout(
             bottom: (origin_x + H_GAP / 2.0, bot_y),
         }
 
-    return _place_layers(_layers(states, starts, transitions), width, height, extra_top)
+    return _place_layers(layers, width, height, extra_top, extra_bottom)
 
 
 def diagram_size(spec: dict[str, Any], max_width: float = MAX_W) -> tuple[float, float]:
@@ -309,6 +336,8 @@ def diagram_size(spec: dict[str, Any], max_width: float = MAX_W) -> tuple[float,
     n = max(1, len(data["states"]))
     loops = _has_loops(data["transitions"])
     extra_top = 16.0 if loops else 0.0
+    hops = _max_rtl_hops(data["states"], data["starts"], data["transitions"])
+    extra_bottom = (18.0 + 12.0 * hops) if hops else 0.0
     if n == 3 and not _is_path_layout(data["transitions"]):
         width = min(max_width, START_LEN + STATE_R + H_GAP + STATE_R + 20)
         height = STATE_R * 2 + V_GAP + extra_top + 28
@@ -317,7 +346,7 @@ def diagram_size(spec: dict[str, Any], max_width: float = MAX_W) -> tuple[float,
         n_l = max(1, len(layers))
         n_h = max(1, max((len(layer) for layer in layers), default=1))
         width = min(max_width, START_LEN + STATE_R + (n_l - 1) * H_GAP + STATE_R + 18)
-        height = STATE_R * 2 + (n_h - 1) * V_GAP + extra_top + 24
+        height = STATE_R * 2 + (n_h - 1) * V_GAP + extra_top + extra_bottom + 24
     if data["caption"]:
         height += 12
     return width, max(32 * mm, min(MAX_H, height))
@@ -387,11 +416,66 @@ def _self_loop(canv, x: float, y: float, radius: float, label: str) -> None:
     _label(canv, x, y + radius + 22, label, 11)
 
 
+def _is_row(pos: dict[str, tuple[float, float]]) -> bool:
+    if len(pos) < 2:
+        return True
+    ys = [p[1] for p in pos.values()]
+    return max(ys) - min(ys) < 12
+
+
+def _hops_between(x1: float, x2: float) -> int:
+    return max(1, int(round(abs(x2 - x1) / H_GAP)))
+
+
+def _draw_straight_edge(canv, x1: float, y1: float, x2: float, y2: float, radius: float, label: str) -> None:
+    ux, uy = _unit(x2 - x1, y2 - y1)
+    start = (x1 + ux * radius, y1 + uy * radius)
+    end = (x2 - ux * radius, y2 - uy * radius)
+    mx, my = (start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0
+    nx, ny = _unit(-(y2 - y1), x2 - x1)
+    canv.setStrokeColor(INK)
+    canv.setLineWidth(1.2)
+    canv.line(start[0], start[1], end[0], end[1])
+    _arrow(canv, start[0], start[1], end[0], end[1], 6.2)
+    if abs(y1 - y2) < 8:
+        _label(canv, mx, my + 11, label)
+    else:
+        _label(canv, mx + nx * 10, my + ny * 10, label)
+
+
+def _draw_bow_edge(
+    canv,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    radius: float,
+    label: str,
+    side: float,
+    hops: int,
+) -> None:
+    """side +1 = arc above the row, -1 = arc below."""
+    start = (x1, y1 + side * radius)
+    end = (x2, y2 + side * radius)
+    mx, my = (start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0
+    bow = 16.0 + 11.0 * hops
+    ctrl = (mx, my + side * bow)
+    p = canv.beginPath()
+    p.moveTo(*start)
+    p.curveTo(ctrl[0], ctrl[1], ctrl[0], ctrl[1], *end)
+    canv.setStrokeColor(INK)
+    canv.setLineWidth(1.2)
+    canv.drawPath(p, stroke=1, fill=0)
+    _arrow(canv, ctrl[0], ctrl[1], end[0], end[1], 6.2)
+    _label(canv, ctrl[0], ctrl[1] + side * 8, label)
+
+
 def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radius: float = STATE_R) -> None:
     data = normalize_diagram(spec)
     pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
     edges = _group_edges(data["transitions"])
     two_way = _two_way_pairs(edges)
+    row = _is_row(pos)
 
     canv.setStrokeColor(INK)
     canv.setFillColor(INK)
@@ -407,38 +491,21 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
         if src == dst:
             _self_loop(canv, x1, y1, radius, label)
             continue
-        ux, uy = _unit(x2 - x1, y2 - y1)
-        start = (x1 + ux * radius, y1 + uy * radius)
-        end = (x2 - ux * radius, y2 - uy * radius)
-        mx, my = (start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0
-        dist = math.hypot(x2 - x1, y2 - y1) or 1.0
-        nx, ny = _unit(-(y2 - y1), x2 - x1)
+        hops = _hops_between(x1, x2)
+        if row:
+            if x2 >= x1 + 8:
+                if hops == 1:
+                    _draw_straight_edge(canv, x1, y1, x2, y2, radius, label)
+                else:
+                    _draw_bow_edge(canv, x1, y1, x2, y2, radius, label, 1.0, hops)
+            else:
+                _draw_bow_edge(canv, x1, y1, x2, y2, radius, label, -1.0, hops)
+            continue
         if (src, dst) in two_way:
             sign = 1.0 if src < dst else -1.0
-            bow = min(28.0, max(16.0, dist * 0.24))
-            ctrl = (mx + nx * bow * sign, my + ny * bow * sign)
-            p = canv.beginPath()
-            p.moveTo(*start)
-            p.curveTo(ctrl[0], ctrl[1], ctrl[0], ctrl[1], *end)
-            canv.setStrokeColor(INK)
-            canv.setLineWidth(1.2)
-            canv.drawPath(p, stroke=1, fill=0)
-            _arrow(canv, ctrl[0], ctrl[1], end[0], end[1], 6.2)
-            qx = 0.25 * start[0] + 0.5 * ctrl[0] + 0.25 * end[0]
-            qy = 0.25 * start[1] + 0.5 * ctrl[1] + 0.25 * end[1]
-            ox, oy = _unit(ctrl[0] - mx, ctrl[1] - my)
-            if abs(ox) + abs(oy) < 0.2:
-                ox, oy = 0.0, 1.0
-            _label(canv, qx + ox * 10, qy + oy * 10, label)
+            _draw_bow_edge(canv, x1, y1, x2, y2, radius, label, sign, 1)
             continue
-        canv.setStrokeColor(INK)
-        canv.setLineWidth(1.2)
-        canv.line(start[0], start[1], end[0], end[1])
-        _arrow(canv, start[0], start[1], end[0], end[1], 6.2)
-        if abs(y1 - y2) < 8:
-            _label(canv, mx, my + 11, label)
-        else:
-            _label(canv, mx + nx * 10, my + ny * 10, label)
+        _draw_straight_edge(canv, x1, y1, x2, y2, radius, label)
 
     for name, (x, y) in pos.items():
         canv.setStrokeColor(INK)
