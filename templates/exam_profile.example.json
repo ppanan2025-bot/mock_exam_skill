@@ -1,0 +1,45 @@
+{
+  "id": "comp2022-mid-semester",
+  "course_code": "COMP2022",
+  "course_name": "Models of Computation",
+  "exam_kind": "mid-semester",
+  "aliases": [
+    "mid-semester exam of COMP2022",
+    "COMP2022 midsem",
+    "COMP2022 midterm"
+  ],
+  "meta": {
+    "institution": "Example University",
+    "paper_title": "Mid-Semester Examination",
+    "duration": "1 hour",
+    "total_marks": 40,
+    "permitted_materials": "Closed book.",
+    "instructions": ["Answer all questions."]
+  },
+  "sections": [
+    {
+      "id": "A",
+      "title": "Multiple choice",
+      "question_count": 4,
+      "types": ["mcq"],
+      "marks_each": 2
+    },
+    {
+      "id": "B",
+      "title": "Written",
+      "slots": [
+        { "type": "mcq", "marks": 4, "features": ["code"] },
+        { "type": "short", "marks": 8, "features": ["diagram"] },
+        { "type": "short", "marks": 8 },
+        { "type": "long", "marks": 12 }
+      ]
+    }
+  ],
+  "conventions": {
+    "mcq_style": "(A) (B) (C) (D)",
+    "macros_in_code_field": true,
+    "automata_as_diagram": true
+  },
+  "topics": ["regular languages", "DFAs", "NFAs", "macros"],
+  "notes": "Store format only. Never copy the example paper's questions."
+}
