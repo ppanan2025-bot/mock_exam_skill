@@ -319,6 +319,40 @@ class GraphRenderTests(unittest.TestCase):
         self.assertLess(pos["q1"][0], pos["q2"][0])
         self.assertLess(pos["q2"][0], pos["q3"][0])
 
+    def test_arc_endpoints_sit_on_the_state_circles(self) -> None:
+        import math
+
+        from automata_diagram import _arc_anchors
+
+        ctrl, start, end = _arc_anchors(0.0, 0.0, 60.0, -50.0, 14.5, 20.0)
+        self.assertAlmostEqual(math.hypot(start[0], start[1]), 14.5, places=6)
+        self.assertAlmostEqual(math.hypot(end[0] - 60.0, end[1] + 50.0), 14.5, places=6)
+        self.assertGreater(math.hypot(ctrl[0] - 30.0, ctrl[1] + 25.0), 15.0)
+
+    def test_bottom_state_leaves_room_for_its_loop(self) -> None:
+        from automata_diagram import _layout, diagram_size, normalize_diagram
+
+        spec = {
+            "kind": "dfa",
+            "states": ["s0", "s1", "s2"],
+            "start": "s0",
+            "accept": ["s2"],
+            "transitions": [
+                ["s0", "a", "s0"],
+                ["s0", "b", "s1"],
+                ["s1", "a", "s0"],
+                ["s1", "b", "s2"],
+                ["s2", "a", "s0"],
+                ["s2", "b", "s2"],
+            ],
+        }
+        data = normalize_diagram(spec)
+        width, height = diagram_size(spec)
+        pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
+        self.assertGreater(pos["s2"][1], 14.5)
+        self.assertGreater(pos["s2"][1] - 14.5, 30.0)
+        self.assertLess(pos["s2"][1], pos["s0"][1])
+
     def test_cyclic_dfa_uses_triangle_not_a_line(self) -> None:
         from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram
 

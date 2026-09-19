@@ -340,7 +340,8 @@ def diagram_size(spec: dict[str, Any], max_width: float = MAX_W) -> tuple[float,
     extra_bottom = (18.0 + 12.0 * hops) if hops else 0.0
     if n == 3 and not _is_path_layout(data["transitions"]):
         width = min(max_width, START_LEN + STATE_R + H_GAP + STATE_R + 20)
-        height = STATE_R * 2 + V_GAP + extra_top + 28
+        # a loop on the bottom state hangs below it, so reserve room under the row
+        height = STATE_R * 2 + V_GAP + extra_top + 28 + (24 if loops else 0)
     else:
         layers = _layers(data["states"], data["starts"], data["transitions"])
         n_l = max(1, len(layers))
@@ -400,20 +401,37 @@ def _draw_state_name(canv, x: float, y: float, name: str) -> None:
     canv.drawString(left + bw - 0.4, y - 6.4, digits)
 
 
-def _self_loop(canv, x: float, y: float, radius: float, label: str) -> None:
-    """Teardrop loop on the north of the state, matching textbook figures."""
-    left = (x + radius * math.cos(math.radians(118)), y + radius * math.sin(math.radians(118)))
-    right = (x + radius * math.cos(math.radians(62)), y + radius * math.sin(math.radians(62)))
-    apex = (x, y + radius + 17)
+def _self_loop(canv, x: float, y: float, radius: float, label: str, angle: float = 90.0) -> None:
+    """Teardrop loop pointing along `angle` (90 = north), matching textbook figures."""
+    ang = math.radians(angle)
+    ux, uy = math.cos(ang), math.sin(ang)
+    px, py = -uy, ux
+    spread = math.radians(28)
+    left = (x + radius * math.cos(ang + spread), y + radius * math.sin(ang + spread))
+    right = (x + radius * math.cos(ang - spread), y + radius * math.sin(ang - spread))
+    apex = (x + (radius + 17) * ux, y + (radius + 17) * uy)
     p = canv.beginPath()
     p.moveTo(*left)
-    p.curveTo(left[0] - 7, left[1] + 11, apex[0] - 9, apex[1], *apex)
-    p.curveTo(apex[0] + 9, apex[1], right[0] + 7, right[1] + 11, *right)
+    p.curveTo(
+        left[0] + 7 * px + 11 * ux,
+        left[1] + 7 * py + 11 * uy,
+        apex[0] + 9 * px,
+        apex[1] + 9 * py,
+        *apex,
+    )
+    p.curveTo(
+        apex[0] - 9 * px,
+        apex[1] - 9 * py,
+        right[0] - 7 * px + 11 * ux,
+        right[1] - 7 * py + 11 * uy,
+        *right,
+    )
     canv.setStrokeColor(INK)
     canv.setLineWidth(1.2)
     canv.drawPath(p, stroke=1, fill=0)
-    _arrow(canv, right[0] + 4, right[1] + 6, right[0], right[1], 5.2)
-    _label(canv, x, y + radius + 22, label, 11)
+    _arrow(canv, right[0] - 4 * px + 6 * ux, right[1] - 4 * py + 6 * uy, right[0], right[1], 5.2)
+    gap = radius + (22 if uy >= 0 else 28)
+    _label(canv, x + gap * ux, y + gap * uy, label, 11)
 
 
 def _is_row(pos: dict[str, tuple[float, float]]) -> bool:
@@ -441,6 +459,42 @@ def _draw_straight_edge(canv, x1: float, y1: float, x2: float, y2: float, radius
         _label(canv, mx, my + 11, label)
     else:
         _label(canv, mx + nx * 10, my + ny * 10, label)
+
+
+def _arc_anchors(
+    x1: float, y1: float, x2: float, y2: float, radius: float, bow: float
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """Control point plus entry/exit points sitting on each circle, aimed at the curve."""
+    nx, ny = _unit(-(y2 - y1), x2 - x1)
+    mx, my = (x1 + x2) / 2.0 + nx * bow, (y1 + y2) / 2.0 + ny * bow
+    sx, sy = _unit(mx - x1, my - y1)
+    ex, ey = _unit(mx - x2, my - y2)
+    return (mx, my), (x1 + sx * radius, y1 + sy * radius), (x2 + ex * radius, y2 + ey * radius)
+
+
+def _draw_arc_edge(
+    canv,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    radius: float,
+    label: str,
+    bow: float,
+) -> None:
+    """Curved edge between two states anywhere on the page, not just along a row."""
+    ctrl, start, end = _arc_anchors(x1, y1, x2, y2, radius, bow)
+    p = canv.beginPath()
+    p.moveTo(*start)
+    p.curveTo(ctrl[0], ctrl[1], ctrl[0], ctrl[1], *end)
+    canv.setStrokeColor(INK)
+    canv.setLineWidth(1.2)
+    canv.drawPath(p, stroke=1, fill=0)
+    _arrow(canv, ctrl[0], ctrl[1], end[0], end[1], 6.2)
+    qx = 0.25 * start[0] + 0.5 * ctrl[0] + 0.25 * end[0]
+    qy = 0.25 * start[1] + 0.5 * ctrl[1] + 0.25 * end[1]
+    ox, oy = _unit(ctrl[0] - (start[0] + end[0]) / 2.0, ctrl[1] - (start[1] + end[1]) / 2.0)
+    _label(canv, qx + ox * 9, qy + oy * 9 - 3.5, label)
 
 
 def _draw_bow_edge(
@@ -483,13 +537,16 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
     canv.setLineCap(1)
     canv.setLineJoin(1)
 
+    mid_y = (max(p[1] for p in pos.values()) + min(p[1] for p in pos.values())) / 2.0
+
     for (src, dst), label in edges.items():
         if src not in pos or dst not in pos:
             continue
         x1, y1 = pos[src]
         x2, y2 = pos[dst]
         if src == dst:
-            _self_loop(canv, x1, y1, radius, label)
+            # point the loop away from the figure so it cannot sit on top of an edge
+            _self_loop(canv, x1, y1, radius, label, 90.0 if row or y1 >= mid_y else 270.0)
             continue
         hops = _hops_between(x1, x2)
         if row:
@@ -502,8 +559,9 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
                 _draw_bow_edge(canv, x1, y1, x2, y2, radius, label, -1.0, hops)
             continue
         if (src, dst) in two_way:
-            sign = 1.0 if src < dst else -1.0
-            _draw_bow_edge(canv, x1, y1, x2, y2, radius, label, sign, 1)
+            # each edge bows left of its own direction, so the pair lands on opposite sides
+            dist = math.hypot(x2 - x1, y2 - y1) or 1.0
+            _draw_arc_edge(canv, x1, y1, x2, y2, radius, label, min(26.0, max(15.0, dist * 0.22)))
             continue
         _draw_straight_edge(canv, x1, y1, x2, y2, radius, label)
 
