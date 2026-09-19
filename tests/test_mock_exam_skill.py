@@ -284,6 +284,14 @@ class GraphRenderTests(unittest.TestCase):
         self.assertGreater(pos["q1"][0], pos["q0"][0] + 20)
         self.assertLess(abs(pos["q1"][1] - pos["q0"][1]), 6)
 
+    def test_one_way_edges_are_not_treated_as_two_way(self) -> None:
+        from automata_diagram import _group_edges, _two_way_pairs
+
+        one_way = _group_edges([("q0", "b", "q1"), ("q1", "a", "q2"), ("q2", "ε", "q3")])
+        self.assertEqual(_two_way_pairs(one_way), set())
+        both = _group_edges([("q0", "1", "q1"), ("q1", "1", "q0")])
+        self.assertEqual(_two_way_pairs(both), {("q0", "q1"), ("q1", "q0")})
+
     def test_cyclic_dfa_uses_triangle_not_a_line(self) -> None:
         from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram
 
