@@ -130,6 +130,11 @@ def _dot_label(name: str) -> str:
     return f"<<I>{name}</I>>"
 
 
+def _two_way_pairs(edges: dict[tuple[str, str], str]) -> set[tuple[str, str]]:
+    pairs = {key for key in edges if key[0] != key[1]}
+    return {key for key in pairs if (key[1], key[0]) in pairs}
+
+
 def _pair_set(transitions: list[tuple[str, str, str]]) -> set[tuple[str, str]]:
     return {(src, dst) for src, _lab, dst in transitions if src != dst}
 
@@ -386,7 +391,7 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
     data = normalize_diagram(spec)
     pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
     edges = _group_edges(data["transitions"])
-    reverse = {(b, a) for a, b in edges if a != b}
+    two_way = _two_way_pairs(edges)
 
     canv.setStrokeColor(INK)
     canv.setFillColor(INK)
@@ -408,39 +413,32 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
         mx, my = (start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0
         dist = math.hypot(x2 - x1, y2 - y1) or 1.0
         nx, ny = _unit(-(y2 - y1), x2 - x1)
-        if (dst, src) in reverse:
+        if (src, dst) in two_way:
             sign = 1.0 if src < dst else -1.0
             bow = min(28.0, max(16.0, dist * 0.24))
             ctrl = (mx + nx * bow * sign, my + ny * bow * sign)
-        elif abs(y1 - y2) < 8:
+            p = canv.beginPath()
+            p.moveTo(*start)
+            p.curveTo(ctrl[0], ctrl[1], ctrl[0], ctrl[1], *end)
             canv.setStrokeColor(INK)
             canv.setLineWidth(1.2)
-            canv.line(start[0], start[1], end[0], end[1])
-            _arrow(canv, start[0], start[1], end[0], end[1], 6.2)
-            _label(canv, mx, my + 11, label)
+            canv.drawPath(p, stroke=1, fill=0)
+            _arrow(canv, ctrl[0], ctrl[1], end[0], end[1], 6.2)
+            qx = 0.25 * start[0] + 0.5 * ctrl[0] + 0.25 * end[0]
+            qy = 0.25 * start[1] + 0.5 * ctrl[1] + 0.25 * end[1]
+            ox, oy = _unit(ctrl[0] - mx, ctrl[1] - my)
+            if abs(ox) + abs(oy) < 0.2:
+                ox, oy = 0.0, 1.0
+            _label(canv, qx + ox * 10, qy + oy * 10, label)
             continue
-        else:
-            cx = sum(p[0] for p in pos.values()) / len(pos)
-            cy = sum(p[1] for p in pos.values()) / len(pos)
-            away = (mx - cx, my - cy)
-            if abs(away[0]) + abs(away[1]) < 4:
-                away = (0, 12)
-            bx, by = _unit(*away)
-            bow = min(16.0, max(8.0, dist * 0.1))
-            ctrl = (mx + bx * bow, my + by * bow)
-        p = canv.beginPath()
-        p.moveTo(*start)
-        p.curveTo(ctrl[0], ctrl[1], ctrl[0], ctrl[1], *end)
         canv.setStrokeColor(INK)
         canv.setLineWidth(1.2)
-        canv.drawPath(p, stroke=1, fill=0)
-        _arrow(canv, ctrl[0], ctrl[1], end[0], end[1], 6.2)
-        qx = 0.25 * start[0] + 0.5 * ctrl[0] + 0.25 * end[0]
-        qy = 0.25 * start[1] + 0.5 * ctrl[1] + 0.25 * end[1]
-        ox, oy = _unit(ctrl[0] - mx, ctrl[1] - my)
-        if abs(ox) + abs(oy) < 0.2:
-            ox, oy = 0.0, 1.0
-        _label(canv, qx + ox * 10, qy + oy * 10, label)
+        canv.line(start[0], start[1], end[0], end[1])
+        _arrow(canv, start[0], start[1], end[0], end[1], 6.2)
+        if abs(y1 - y2) < 8:
+            _label(canv, mx, my + 11, label)
+        else:
+            _label(canv, mx + nx * 10, my + ny * 10, label)
 
     for name, (x, y) in pos.items():
         canv.setStrokeColor(INK)
