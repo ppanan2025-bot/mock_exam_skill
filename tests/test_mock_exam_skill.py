@@ -232,10 +232,57 @@ class GraphRenderTests(unittest.TestCase):
             ],
         }
         height = diagram_height(spec)
-        self.assertLessEqual(height, 92 * mm)
+        self.assertLessEqual(height, 72 * mm)
         box = AutomataDiagram(spec, 400)
-        self.assertLessEqual(box.height, 100 * mm)
+        self.assertLessEqual(box.height, 80 * mm)
         self.assertGreater(box.height, 28 * mm)
+        self.assertIsNone(box._img)
+
+    def test_four_state_path_stays_a_row_not_a_plus(self) -> None:
+        from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram
+
+        spec = {
+            "kind": "nfa",
+            "caption": "NFA over {a,b}",
+            "states": ["q0", "q1", "q2", "q3"],
+            "start": "q0",
+            "accept": ["q3"],
+            "transitions": [
+                ["q0", "b", "q1"],
+                ["q1", "a", "q2"],
+                ["q2", "ε", "q3"],
+            ],
+        }
+        data = normalize_diagram(spec)
+        self.assertTrue(_is_path_layout(data["transitions"]))
+        width, height = diagram_size(spec)
+        pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
+        xs = [pos["q0"][0], pos["q1"][0], pos["q2"][0], pos["q3"][0]]
+        ys = [pos[name][1] for name in ("q0", "q1", "q2", "q3")]
+        self.assertEqual(xs, sorted(xs))
+        self.assertLess(max(ys) - min(ys), 8)
+        self.assertGreater(pos["q3"][0] - pos["q0"][0], 100)
+        self.assertLess(width / height, 4.5)
+
+    def test_two_state_dfa_is_side_by_side(self) -> None:
+        from automata_diagram import _layout, diagram_size, normalize_diagram
+
+        spec = {
+            "kind": "dfa",
+            "states": ["q0", "q1"],
+            "start": "q0",
+            "accept": ["q1"],
+            "transitions": [
+                ["q0", "0", "q0"],
+                ["q0", "1", "q1"],
+                ["q1", "0,1,2", "q1"],
+            ],
+        }
+        data = normalize_diagram(spec)
+        width, height = diagram_size(spec)
+        pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
+        self.assertGreater(pos["q1"][0], pos["q0"][0] + 20)
+        self.assertLess(abs(pos["q1"][1] - pos["q0"][1]), 6)
 
     def test_cyclic_dfa_uses_triangle_not_a_line(self) -> None:
         from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram

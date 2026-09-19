@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Textbook left-to-right DFA/NFA diagrams (Graphviz if present, else reportlab)."""
+"""Compact textbook DFA/NFA figures (reportlab). Graphviz is not used: `dot` spreads states."""
 
 from __future__ import annotations
 
@@ -8,19 +8,19 @@ import re
 import shutil
 import subprocess
 from collections import defaultdict, deque
-from io import BytesIO
 from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Flowable
 
 INK = colors.HexColor("#111111")
 STATE_R = 14.5
 START_LEN = 16.0
-MAX_W = 130 * mm
-MAX_H = 88 * mm
+H_GAP = 66.0
+V_GAP = 60.0
+MAX_W = 120 * mm
+MAX_H = 72 * mm
 
 _TRANS = re.compile(
     r"\b([A-Za-z][A-Za-z0-9]*)\s*-{1,2}\s*"
@@ -135,6 +135,7 @@ def _pair_set(transitions: list[tuple[str, str, str]]) -> set[tuple[str, str]]:
 
 
 def _is_path_layout(transitions: list[tuple[str, str, str]]) -> bool:
+    """True only for a real chain (picture-2 style). Cycles and two-way arcs are 2D."""
     pairs = _pair_set(transitions)
     if any((dst, src) in pairs for src, dst in pairs):
         return False
@@ -142,35 +143,33 @@ def _is_path_layout(transitions: list[tuple[str, str, str]]) -> bool:
     for src, dst in pairs:
         und[src].add(dst)
         und[dst].add(src)
-    return all(len(neigh) <= 2 for neigh in und.values())
+    if len(und) <= 2:
+        return True
+    if any(len(neigh) > 2 for neigh in und.values()):
+        return False
+    ends = sum(1 for neigh in und.values() if len(neigh) == 1)
+    return ends == 2
 
 
 def to_dot(spec: dict[str, Any]) -> str:
+    """DOT is kept for debugging; exam PDFs draw with reportlab, not Graphviz."""
     data = normalize_diagram(spec)
     edges = _group_edges(data["transitions"])
-    linear = _is_path_layout(data["transitions"])
     lines = [
         "digraph G {",
+        "  rankdir=LR;",
         "  splines=true;",
         '  bgcolor="transparent";',
-        "  pad=0.18;",
-        "  nodesep=0.7;",
-        "  ranksep=0.7;",
+        "  pad=0.12;",
+        "  nodesep=0.35;",
+        "  ranksep=0.45;",
         '  node [shape=circle, fontname="Times-Italic", fontsize=14,',
         "        width=0.52, height=0.52, fixedsize=true, penwidth=1.35];",
         '  edge [fontname="Times-Italic", fontsize=12, arrowsize=0.72, penwidth=1.2];',
     ]
-    if linear:
-        lines.append("  rankdir=LR;")
     for name in data["states"]:
         shape = "doublecircle" if name in data["accept"] else "circle"
         lines.append(f"  {_dot_id(name)} [shape={shape}, label={_dot_label(name)}];")
-    if not linear and data["starts"]:
-        start = data["starts"][0]
-        rest = [s for s in data["states"] if s != start]
-        partner = next((s for s in rest if s not in data["accept"]), rest[0] if rest else None)
-        if partner:
-            lines.append(f"  {{ rank=same; {_dot_id(start)}; {_dot_id(partner)}; }}")
     if data["starts"]:
         lines.append('  _start [shape=none, label="", width=0.01, height=0.01];')
         lines.append(f"  _start -> {_dot_id(data['starts'][0])} [arrowsize=0.85];")
@@ -188,9 +187,8 @@ def render_dot_png(spec: dict[str, Any], max_in: tuple[float, float] | None = No
     dot = shutil.which("dot")
     if not dot:
         return None
-    data = normalize_diagram(spec)
     if max_in is None:
-        max_in = (4.6, 2.05) if _is_path_layout(data["transitions"]) else (4.4, 3.35)
+        max_in = (3.6, 1.7)
     w, h = max_in
     try:
         proc = subprocess.run(
@@ -239,6 +237,35 @@ def _layers(states: list[str], starts: list[str], transitions: list[tuple[str, s
     return layers or [[]]
 
 
+def _has_loops(transitions: list[tuple[str, str, str]]) -> bool:
+    return any(src == dst for src, _lab, dst in transitions)
+
+
+def _place_layers(
+    layers: list[list[str]],
+    width: float,
+    height: float,
+    extra_top: float = 0.0,
+) -> dict[str, tuple[float, float]]:
+    n_l = max(1, len(layers))
+    n_h = max(1, max((len(layer) for layer in layers), default=1))
+    content_w = (n_l - 1) * H_GAP
+    content_h = (n_h - 1) * V_GAP
+    min_x = STATE_R + START_LEN + 6
+    origin_x = max(min_x, (width - content_w) / 2.0)
+    origin_y = max(STATE_R + 6, (height - extra_top - content_h) / 2.0)
+    pos: dict[str, tuple[float, float]] = {}
+    for li, layer in enumerate(layers):
+        x = origin_x + li * H_GAP
+        k = len(layer)
+        col_h = (k - 1) * V_GAP
+        top = origin_y + extra_top + (content_h - col_h) / 2.0 + col_h
+        for j, name in enumerate(layer):
+            y = origin_y + extra_top + content_h / 2.0 if k == 1 else top - j * V_GAP
+            pos[name] = (x, y)
+    return pos
+
+
 def _layout(
     states: list[str],
     starts: list[str],
@@ -247,68 +274,48 @@ def _layout(
     width: float,
     height: float,
 ) -> dict[str, tuple[float, float]]:
-    if _is_path_layout(transitions) or len(states) <= 1:
-        layers = _layers(states, starts, transitions)
-        n_l = max(1, len(layers))
-        pad_l, pad_r, pad_t, pad_b = 34.0, 22.0, 36.0, 20.0
-        inner_w = max(40.0, width - pad_l - pad_r)
-        inner_h = max(36.0, height - pad_t - pad_b)
-        xs = [pad_l + inner_w / 2] if n_l == 1 else [pad_l + i * inner_w / (n_l - 1) for i in range(n_l)]
-        pos: dict[str, tuple[float, float]] = {}
-        for li, layer in enumerate(layers):
-            k = len(layer)
-            for j, name in enumerate(layer):
-                if k == 1:
-                    y = pad_b + inner_h / 2
-                else:
-                    y = pad_b + inner_h - j * inner_h / (k - 1)
-                pos[name] = (xs[li], y)
-        return pos
+    extra_top = 16.0 if _has_loops(transitions) else 0.0
+    if len(states) <= 1 or _is_path_layout(transitions):
+        return _place_layers(_layers(states, starts, transitions), width, height, extra_top)
 
     start = starts[0] if starts else states[0]
     rest = [s for s in states if s != start]
-    pad_l, pad_r, pad_t, pad_b = 38.0, 26.0, 34.0, 26.0
-    top_y = height - pad_t
-    bot_y = pad_b + 4
-    left_x = pad_l
-    right_x = width - pad_r
-    pos: dict[str, tuple[float, float]] = {start: (left_x, top_y)}
     if len(states) == 2:
-        pos[rest[0]] = (right_x, top_y)
-        return pos
+        return _place_layers([[start], rest], width, height, extra_top)
+
     if len(states) == 3:
         partner = next((s for s in rest if s not in accept), rest[0])
         bottom = next(s for s in rest if s != partner)
-        pos[partner] = (right_x, top_y)
-        pos[bottom] = ((left_x + right_x) / 2.0, bot_y)
-        return pos
-    ordered = [start] + rest
-    cx, cy = width / 2.0, height / 2.0
-    rx = max(36.0, (width - pad_l - pad_r) / 2.0)
-    ry = max(32.0, (height - pad_t - pad_b) / 2.0)
-    for i, name in enumerate(ordered):
-        ang = math.pi + i * 2.0 * math.pi / len(ordered)
-        pos[name] = (cx + rx * math.cos(ang), cy + ry * math.sin(ang))
-    return pos
+        min_x = STATE_R + START_LEN + 6
+        origin_x = max(min_x, (width - H_GAP) / 2.0)
+        top_y = height - STATE_R - 8 - extra_top
+        bot_y = top_y - V_GAP
+        return {
+            start: (origin_x, top_y),
+            partner: (origin_x + H_GAP, top_y),
+            bottom: (origin_x + H_GAP / 2.0, bot_y),
+        }
+
+    return _place_layers(_layers(states, starts, transitions), width, height, extra_top)
 
 
 def diagram_size(spec: dict[str, Any], max_width: float = MAX_W) -> tuple[float, float]:
     data = normalize_diagram(spec)
     n = max(1, len(data["states"]))
-    if _is_path_layout(data["transitions"]):
+    loops = _has_loops(data["transitions"])
+    extra_top = 16.0 if loops else 0.0
+    if n == 3 and not _is_path_layout(data["transitions"]):
+        width = min(max_width, START_LEN + STATE_R + H_GAP + STATE_R + 20)
+        height = STATE_R * 2 + V_GAP + extra_top + 28
+    else:
         layers = _layers(data["states"], data["starts"], data["transitions"])
         n_l = max(1, len(layers))
         n_h = max(1, max((len(layer) for layer in layers), default=1))
-        width = min(max_width, 30 * mm + n_l * 34 * mm)
-        height = min(MAX_H, 32 * mm + n_h * 24 * mm)
-    else:
-        width = min(max_width, 92 * mm if n <= 3 else 118 * mm)
-        height = min(MAX_H, 68 * mm if n <= 3 else 82 * mm)
-    if any(src == dst for src, _lab, dst in data["transitions"]):
-        height = min(MAX_H, height + 8)
+        width = min(max_width, START_LEN + STATE_R + (n_l - 1) * H_GAP + STATE_R + 18)
+        height = STATE_R * 2 + (n_h - 1) * V_GAP + extra_top + 24
     if data["caption"]:
         height += 12
-    return width, max(40 * mm, height)
+    return width, max(32 * mm, min(MAX_H, height))
 
 
 def diagram_height(spec: dict[str, Any], width: float | None = None) -> float:
@@ -403,17 +410,23 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
         nx, ny = _unit(-(y2 - y1), x2 - x1)
         if (dst, src) in reverse:
             sign = 1.0 if src < dst else -1.0
-            bow = min(34.0, max(20.0, dist * 0.28))
+            bow = min(28.0, max(16.0, dist * 0.24))
             ctrl = (mx + nx * bow * sign, my + ny * bow * sign)
+        elif abs(y1 - y2) < 8:
+            canv.setStrokeColor(INK)
+            canv.setLineWidth(1.2)
+            canv.line(start[0], start[1], end[0], end[1])
+            _arrow(canv, start[0], start[1], end[0], end[1], 6.2)
+            _label(canv, mx, my + 11, label)
+            continue
         else:
-            # bulge slightly outward from the figure centre
             cx = sum(p[0] for p in pos.values()) / len(pos)
             cy = sum(p[1] for p in pos.values()) / len(pos)
             away = (mx - cx, my - cy)
             if abs(away[0]) + abs(away[1]) < 4:
-                away = (0, 14)
+                away = (0, 12)
             bx, by = _unit(*away)
-            bow = min(22.0, max(10.0, dist * 0.12))
+            bow = min(16.0, max(8.0, dist * 0.1))
             ctrl = (mx + bx * bow, my + by * bow)
         p = canv.beginPath()
         p.moveTo(*start)
@@ -425,6 +438,8 @@ def draw_automata(canv, spec: dict[str, Any], width: float, height: float, radiu
         qx = 0.25 * start[0] + 0.5 * ctrl[0] + 0.25 * end[0]
         qy = 0.25 * start[1] + 0.5 * ctrl[1] + 0.25 * end[1]
         ox, oy = _unit(ctrl[0] - mx, ctrl[1] - my)
+        if abs(ox) + abs(oy) < 0.2:
+            ox, oy = 0.0, 1.0
         _label(canv, qx + ox * 10, qy + oy * 10, label)
 
     for name, (x, y) in pos.items():
@@ -454,21 +469,10 @@ class AutomataDiagram(Flowable):
         self.spec = spec
         data = normalize_diagram(spec)
         self.caption = data["caption"]
-        self._png = render_dot_png(spec)
         nat_w, nat_h = diagram_size(spec, width)
-        if self._png is not None:
-            img = ImageReader(BytesIO(self._png))
-            iw, ih = img.getSize()
-            aspect = ih / float(iw or 1)
-            self.width = min(width, MAX_W, 125 * mm)
-            self.height = min(MAX_H, max(42 * mm, self.width * aspect))
-            if height is not None:
-                self.height = min(self.height, height)
-            self._img = img
-        else:
-            self.width = min(width, nat_w, MAX_W)
-            self.height = height if height is not None else nat_h
-            self._img = None
+        self.width = min(width, nat_w, MAX_W)
+        self.height = height if height is not None else nat_h
+        self._img = None
         if self.caption:
             self.height += 11
         self.splitAtTop = 0  # keep atomic so platypus cannot crop the figure
@@ -481,19 +485,7 @@ class AutomataDiagram(Flowable):
         cap = 11 if self.caption else 0
         graph_h = self.height - cap
         self.canv.saveState()
-        if self._img is not None:
-            self.canv.drawImage(
-                self._img,
-                0,
-                cap,
-                width=self.width,
-                height=graph_h,
-                preserveAspectRatio=True,
-                mask="auto",
-                anchor="c",
-            )
-        else:
-            draw_automata(self.canv, self.spec, self.width, graph_h)
+        draw_automata(self.canv, self.spec, self.width, graph_h)
         if self.caption:
             self.canv.setFillColor(colors.HexColor("#333333"))
             self.canv.setFont("Times-Italic", 9)
