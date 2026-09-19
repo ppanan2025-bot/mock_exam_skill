@@ -97,6 +97,65 @@ class McqLayoutTests(unittest.TestCase):
             self.assertIn("s0", paper_text)
 
 
+class InferredDiagramTests(unittest.TestCase):
+    def test_parses_eps_arrow_sentence(self) -> None:
+        from automata_diagram import infer_diagram_from_text
+
+        spec = infer_diagram_from_text(
+            "An NFA has q0 -eps→ q1, q1 -eps→ q2, q2 -a→ q3, and no other transitions."
+        )
+        assert spec is not None
+        self.assertEqual(spec["kind"], "nfa")
+        self.assertEqual(spec["start"], "q0")
+        symbols = {(t["from"], t["symbol"], t["to"]) for t in spec["transitions"]}
+        self.assertIn(("q0", "ε", "q1"), symbols)
+        self.assertIn(("q2", "a", "q3"), symbols)
+
+    def test_text_only_nfa_still_draws(self) -> None:
+        try:
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab not installed")
+        from generate_exam_pdf import render
+
+        spec = {
+            "meta": {
+                "course_code": "COMP2022",
+                "course_name": "Models of Computation",
+                "paper_title": "Mock",
+                "duration": "1 hour",
+                "total_marks": 1,
+            },
+            "sections": [
+                {
+                    "id": "A",
+                    "title": "Automata",
+                    "questions": [
+                        {
+                            "id": "A10",
+                            "type": "mcq",
+                            "marks": 1,
+                            "stem": (
+                                "An NFA has q0 -eps→ q1, q1 -eps→ q2, q2 -a→ q3, "
+                                "and no other transitions. Which transition is added?"
+                            ),
+                            "choices": [
+                                {"label": "A", "text": "q0 -a→ q3"},
+                                {"label": "B", "text": "q0 -b→ q3"},
+                            ],
+                            "answer": "A",
+                        }
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "paper.pdf"
+            result = render(spec, out, answers=False)
+            self.assertTrue(result["ok"])
+            self.assertGreater(out.stat().st_size, 2000)
+
+
 class CodeListingTests(unittest.TestCase):
     def test_normalize_preserves_indent(self) -> None:
         from code_block import normalize_code
@@ -131,6 +190,9 @@ class CodeListingTests(unittest.TestCase):
             self.assertRegex(text, r"\bwhile\b")
             self.assertNotIn("rem = left; while", text)
             self.assertIn("Which macro statement", text)
+            self.assertIn("left % right", text)
+            self.assertIn("left // right", text)
+            self.assertNotIn("remainder", text.lower())
 
 
 class GraphRenderTests(unittest.TestCase):
@@ -170,10 +232,34 @@ class GraphRenderTests(unittest.TestCase):
             ],
         }
         height = diagram_height(spec)
-        self.assertLessEqual(height, 75 * mm)
+        self.assertLessEqual(height, 92 * mm)
         box = AutomataDiagram(spec, 400)
-        self.assertLessEqual(box.height, 80 * mm)
+        self.assertLessEqual(box.height, 100 * mm)
         self.assertGreater(box.height, 28 * mm)
+
+    def test_cyclic_dfa_uses_triangle_not_a_line(self) -> None:
+        from automata_diagram import _is_path_layout, _layout, diagram_size, normalize_diagram
+
+        spec = {
+            "kind": "dfa",
+            "states": ["q0", "q1", "q2"],
+            "start": "q0",
+            "accept": ["q2"],
+            "transitions": [
+                ["q0", "0", "q0"],
+                ["q0", "1", "q1"],
+                ["q1", "1", "q0"],
+                ["q1", "0", "q2"],
+                ["q2", "0", "q2"],
+                ["q2", "1", "q0"],
+            ],
+        }
+        data = normalize_diagram(spec)
+        self.assertFalse(_is_path_layout(data["transitions"]))
+        width, height = diagram_size(spec)
+        pos = _layout(data["states"], data["starts"], data["accept"], data["transitions"], width, height)
+        self.assertGreater(pos["q1"][0], pos["q0"][0] + 20)
+        self.assertGreater(pos["q0"][1], pos["q2"][1] + 12)
 
 
 class ExtractMaterialsTests(unittest.TestCase):
@@ -187,6 +273,82 @@ class ExtractMaterialsTests(unittest.TestCase):
             assert rec is not None
             self.assertFalse(rec["empty"])
             self.assertIn("3NF", rec["text"])
+
+
+class ExamProfileTests(unittest.TestCase):
+    def test_example_profile_saves_and_matches_phrase(self) -> None:
+        from exam_profile import find_profile, save_profile, sanitize_profile, validate_profile
+
+        raw = json.loads((ROOT / "templates" / "exam_profile.example.json").read_text(encoding="utf-8"))
+        self.assertEqual(validate_profile(raw), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            result = save_profile(raw, Path(tmp), write_prompt=False)
+            self.assertTrue(result["ok"], result)
+            found = find_profile("please give me the mid-semester exam of COMP2022", Path(tmp))
+            self.assertIsNotNone(found)
+            assert found is not None
+            self.assertEqual(found["course_code"], "COMP2022")
+            self.assertEqual(found["exam_kind"], "mid-semester")
+
+    def test_sanitize_drops_question_text(self) -> None:
+        from exam_profile import sanitize_profile, validate_profile
+
+        leaked = {
+            "course_code": "COMP2022",
+            "exam_kind": "mid-semester",
+            "sections": [
+                {
+                    "id": "A",
+                    "questions": [
+                        {
+                            "type": "mcq",
+                            "marks": 2,
+                            "stem": "COPY THIS QUESTION",
+                            "answer": "B",
+                        }
+                    ],
+                }
+            ],
+        }
+        clean = sanitize_profile(leaked)
+        self.assertNotIn("questions", clean["sections"][0])
+        self.assertEqual(clean["sections"][0]["slots"][0]["type"], "mcq")
+        blob = json.dumps(clean)
+        self.assertNotIn("COPY THIS QUESTION", blob)
+        self.assertEqual(validate_profile(clean), [])
+
+    def test_spec_must_follow_saved_section_shape(self) -> None:
+        from exam_profile import spec_matches_profile
+
+        profile = json.loads((ROOT / "templates" / "exam_profile.example.json").read_text(encoding="utf-8"))
+        spec = {
+            "meta": {"course_code": "COMP2022", "total_marks": 40},
+            "sections": [{"id": "A", "questions": [{"type": "mcq"}]}],
+        }
+        errors = spec_matches_profile(spec, profile)
+        self.assertTrue(any("section count" in e for e in errors))
+
+    def test_save_upserts_website_prompt(self) -> None:
+        from exam_profile import save_profile, website_prompt
+
+        raw = json.loads((ROOT / "templates" / "exam_profile.example.json").read_text(encoding="utf-8"))
+        prompt = website_prompt(raw)
+        self.assertEqual(prompt["text"], "Give me a mock exam of mid-semester COMP2022.")
+        self.assertEqual(prompt["name"], "COMP2022 mid-semester")
+        extra = website_prompt(raw, "30 minutes, extra DFA practice")
+        self.assertIn("Requirements: 30 minutes, extra DFA practice", extra["text"])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = save_profile(
+                raw,
+                root / "profiles",
+                prompts_path=root / "prompts.json",
+            )
+            self.assertTrue(result["ok"], result)
+            payload = json.loads((root / "prompts.json").read_text(encoding="utf-8"))
+            texts = [item["text"] for item in payload["prompts"]]
+            self.assertIn("Give me a mock exam of mid-semester COMP2022.", texts)
+            self.assertEqual(result["website_prompt"]["ok"], True)
 
 
 if __name__ == "__main__":
