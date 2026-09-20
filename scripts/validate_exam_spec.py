@@ -43,6 +43,54 @@ def _check_code(errors: list[str], loc: str, raw: Any) -> None:
     _err(errors, f"{loc} must be a string, list of lines, or object")
 
 
+def _tidy(value: float) -> float | int:
+    return int(value) if abs(value - round(value)) < 0.01 else round(value, 2)
+
+
+def repair(spec: dict[str, Any]) -> list[str]:
+    """Fix mark bookkeeping in place. The questions win; the header follows them.
+
+    A wrong total is a counting slip, not a reason to refuse the paper.
+    """
+    notes: list[str] = []
+    if not isinstance(spec, dict) or not isinstance(spec.get("sections"), list):
+        return notes
+
+    mark_sum = 0.0
+    for section in spec["sections"]:
+        if not isinstance(section, dict) or not isinstance(section.get("questions"), list):
+            continue
+        for question in section["questions"]:
+            if not isinstance(question, dict):
+                continue
+            parts = question.get("parts")
+            if isinstance(parts, list):
+                part_sum = 0.0
+                counted = False
+                for part in parts:
+                    if isinstance(part, dict) and _is_num(part.get("marks")):
+                        part_sum += float(part["marks"])
+                        counted = True
+                if counted and (
+                    not _is_num(question.get("marks"))
+                    or abs(float(question["marks"]) - part_sum) > 0.01
+                ):
+                    was = question.get("marks")
+                    question["marks"] = _tidy(part_sum)
+                    qid = question.get("id") or "?"
+                    notes.append(f"question {qid} marks {was} -> {question['marks']} to match its parts")
+            if _is_num(question.get("marks")):
+                mark_sum += float(question["marks"])
+
+    meta = spec.get("meta")
+    if isinstance(meta, dict) and mark_sum:
+        declared = meta.get("total_marks")
+        if not _is_num(declared) or abs(float(declared) - mark_sum) > 0.01:
+            meta["total_marks"] = _tidy(mark_sum)
+            notes.append(f"meta.total_marks {declared} -> {meta['total_marks']} to match the questions")
+    return notes
+
+
 def validate(spec: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if not isinstance(spec, dict):

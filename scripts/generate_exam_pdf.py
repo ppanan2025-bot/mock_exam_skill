@@ -462,13 +462,16 @@ def main() -> int:
     scripts_dir = Path(__file__).resolve().parent
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
-    from validate_exam_spec import validate
+    from validate_exam_spec import repair, validate
 
+    notes = repair(spec)
     errors = validate(spec)
     if errors:
         print(json.dumps({"ok": False, "errors": errors}, ensure_ascii=False, indent=2))
         return 1
     result = render(spec, args.output, args.answers)
+    if notes:
+        result["repaired"] = notes
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

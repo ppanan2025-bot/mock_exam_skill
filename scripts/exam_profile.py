@@ -19,7 +19,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from validate_exam_spec import validate  # noqa: E402
+from validate_exam_spec import repair, validate  # noqa: E402
 
 LEAK_KEYS = {
     "stem",
@@ -392,6 +392,7 @@ def render_from_profile(
     profile: dict[str, Any],
     output_prefix: Path,
 ) -> dict[str, Any]:
+    notes = repair(spec)
     errors = validate(spec)
     errors.extend(spec_matches_profile(spec, profile))
     if errors:
@@ -402,12 +403,15 @@ def render_from_profile(
     answers = output_prefix.with_name(output_prefix.name + "-answers.pdf")
     paper_result = render(spec, paper, answers=False)
     answers_result = render(spec, answers, answers=True)
-    return {
+    result = {
         "ok": bool(paper_result.get("ok") and answers_result.get("ok")),
         "paper": paper_result,
         "answers": answers_result,
         "profile_id": profile_id(profile),
     }
+    if notes:
+        result["repaired"] = notes
+    return result
 
 
 def _load_json(path: Path) -> dict[str, Any]:

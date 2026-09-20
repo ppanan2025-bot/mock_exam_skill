@@ -41,6 +41,41 @@ class ValidateExamSpecTests(unittest.TestCase):
         errors = validate(spec)
         self.assertTrue(any("total_marks" in e for e in errors))
 
+    def test_repair_fixes_total_marks_instead_of_blocking(self) -> None:
+        from validate_exam_spec import repair
+
+        spec = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        real_total = spec["meta"]["total_marks"]
+        spec["meta"]["total_marks"] = real_total - 8
+        notes = repair(spec)
+        self.assertTrue(notes)
+        self.assertEqual(spec["meta"]["total_marks"], real_total)
+        self.assertEqual(validate(spec), [])
+
+    def test_mismatched_total_still_renders_a_paper(self) -> None:
+        try:
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab not installed")
+        import subprocess
+
+        spec = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        spec["meta"]["total_marks"] = 40
+        with tempfile.TemporaryDirectory() as tmp:
+            spec_path = Path(tmp) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out = Path(tmp) / "paper.pdf"
+            proc = subprocess.run(
+                [sys.executable, str(SCRIPTS / "generate_exam_pdf.py"), str(spec_path), "-o", str(out)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+            payload = json.loads(proc.stdout)
+            self.assertTrue(payload["ok"])
+            self.assertIn("repaired", payload)
+            self.assertTrue(out.is_file())
+
     def test_duplicate_ids_are_caught(self) -> None:
         spec = json.loads(EXAMPLE.read_text(encoding="utf-8"))
         spec["sections"][0]["questions"][1]["id"] = spec["sections"][0]["questions"][0]["id"]
