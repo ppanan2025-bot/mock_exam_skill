@@ -76,6 +76,75 @@ class ValidateExamSpecTests(unittest.TestCase):
             self.assertIn("repaired", payload)
             self.assertTrue(out.is_file())
 
+    def test_inline_numbered_asks_split_onto_their_own_lines(self) -> None:
+        from generate_exam_pdf import split_enumerated
+
+        lead, items = split_enumerated(
+            "Consider the language over {a, b}. 1. Give a regular expression "
+            "for this language. (4 marks) 2. Explain why your expression is "
+            "correct. (4 marks, at most 150 words)"
+        )
+        self.assertEqual(lead, "Consider the language over {a, b}.")
+        self.assertEqual(len(items), 2)
+        self.assertTrue(items[0].startswith("Give a regular expression"))
+        self.assertTrue(items[1].startswith("Explain why"))
+
+    def test_plain_stem_and_decimals_are_left_alone(self) -> None:
+        from generate_exam_pdf import split_enumerated
+
+        plain = "Draw a DFA over {a,b} that accepts strings ending in bab."
+        self.assertEqual(split_enumerated(plain), (plain, []))
+        decimals = "Show that the ratio is 1.5 and the bound is 2.5 for all inputs."
+        self.assertEqual(split_enumerated(decimals), (decimals, []))
+
+    def test_subparts_render_on_separate_lines(self) -> None:
+        try:
+            from pypdf import PdfReader
+            import reportlab  # noqa: F401
+        except ImportError:
+            self.skipTest("reportlab/pypdf not installed")
+        from generate_exam_pdf import render
+
+        spec = {
+            "meta": {
+                "course_code": "COMP2022",
+                "course_name": "Models of Computation",
+                "paper_title": "Mock",
+                "duration": "1 hour",
+                "total_marks": 8,
+            },
+            "sections": [
+                {
+                    "id": "B",
+                    "title": "Written problems",
+                    "questions": [
+                        {
+                            "id": "B1",
+                            "type": "long",
+                            "marks": 8,
+                            "stem": (
+                                "Consider the language over {a, b} of strings containing exactly "
+                                "two occurrences of ab. 1. Give a regular expression for this "
+                                "language. (4 marks) 2. Explain why your expression is correct. "
+                                "(4 marks)"
+                            ),
+                            "answer": "x",
+                        }
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "paper.pdf"
+            self.assertTrue(render(spec, out, answers=False)["ok"])
+            text = "\n".join((p.extract_text() or "") for p in PdfReader(str(out)).pages)
+            self.assertIn("(1)", text)
+            self.assertIn("(2)", text)
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            first = next(i for i, line in enumerate(lines) if line.startswith("(1)"))
+            second = next(i for i, line in enumerate(lines) if line.startswith("(2)"))
+            self.assertLess(first, second)
+
     def test_duplicate_ids_are_caught(self) -> None:
         spec = json.loads(EXAMPLE.read_text(encoding="utf-8"))
         spec["sections"][0]["questions"][1]["id"] = spec["sections"][0]["questions"][0]["id"]
@@ -353,6 +422,91 @@ class GraphRenderTests(unittest.TestCase):
         self.assertLess(pos["q0"][0], pos["q1"][0])
         self.assertLess(pos["q1"][0], pos["q2"][0])
         self.assertLess(pos["q2"][0], pos["q3"][0])
+
+    def test_loop_labels_stay_inside_the_figure_box(self) -> None:
+        from reportlab.pdfgen import canvas as pdfcanvas
+
+        import automata_diagram as ad
+
+        spec = {
+            "kind": "dfa",
+            "states": ["q0", "q1", "q2", "q3"],
+            "start": "q0",
+            "accept": ["q3"],
+            "transitions": [
+                {"from": "q0", "symbol": "a", "to": "q0"},
+                {"from": "q0", "symbol": "b", "to": "q1"},
+                {"from": "q1", "symbol": "a", "to": "q2"},
+                {"from": "q1", "symbol": "b", "to": "q1"},
+                {"from": "q2", "symbol": "b", "to": "q3"},
+                {"from": "q2", "symbol": "a", "to": "q0"},
+                {"from": "q3", "symbol": "a", "to": "q2"},
+                {"from": "q3", "symbol": "b", "to": "q1"},
+            ],
+        }
+        width, height = ad.diagram_size(spec, ad.MAX_W)
+        drawn: list[tuple] = []
+        original = ad._label
+        ad._label = lambda c, x, y, text, size=11: drawn.append((x, y, text, size))
+        try:
+            canv = pdfcanvas.Canvas("/dev/null")
+            ad.draw_automata(canv, spec, width, height)
+        finally:
+            ad._label = original
+
+        self.assertTrue(drawn)
+        canv = pdfcanvas.Canvas("/dev/null")
+        for x, y, text, size in drawn:
+            rect = ad._rect_for(canv, x, y, text, size)
+            self.assertGreaterEqual(rect[1], 0, f"{text} falls below the figure")
+            self.assertLessEqual(rect[3], height, f"{text} spills above the figure")
+
+    def test_edge_labels_do_not_land_on_top_of_each_other(self) -> None:
+        from reportlab.pdfgen import canvas as pdfcanvas
+
+        from automata_diagram import _overlaps, _place_labels, _rect_for
+
+        drawn: list[tuple] = []
+        canv = pdfcanvas.Canvas("/dev/null")
+        original = _place_labels.__globals__["_label"]
+
+        def spy(c, x, y, text, size=11):
+            drawn.append((x, y, text, size))
+
+        _place_labels.__globals__["_label"] = spy
+        try:
+            requests = [
+                (100.0, 100.0, "a", 11, (0.0, 1.0)),
+                (100.0, 100.0, "b", 11, (0.0, 1.0)),
+                (101.0, 102.0, "ε", 11, (0.0, 1.0)),
+            ]
+            _place_labels(canv, requests, [])
+        finally:
+            _place_labels.__globals__["_label"] = original
+
+        self.assertEqual(len(drawn), 3)
+        rects = [_rect_for(canv, x, y, text, size) for x, y, text, size in drawn]
+        for i in range(len(rects)):
+            for j in range(i + 1, len(rects)):
+                self.assertFalse(_overlaps(rects[i], rects[j]), f"{drawn[i]} overlaps {drawn[j]}")
+
+    def test_labels_are_pushed_off_the_state_circles(self) -> None:
+        from reportlab.pdfgen import canvas as pdfcanvas
+
+        from automata_diagram import _overlaps, _place_labels, _rect_for
+
+        drawn: list[tuple] = []
+        canv = pdfcanvas.Canvas("/dev/null")
+        original = _place_labels.__globals__["_label"]
+        _place_labels.__globals__["_label"] = lambda c, x, y, text, size=11: drawn.append((x, y, text, size))
+        try:
+            circle = (86.0, 86.0, 114.0, 114.0)
+            _place_labels(canv, [(100.0, 100.0, "a", 11, (0.0, 1.0))], [circle])
+        finally:
+            _place_labels.__globals__["_label"] = original
+
+        self.assertEqual(len(drawn), 1)
+        self.assertFalse(_overlaps(_rect_for(canv, *drawn[0]), circle))
 
     def test_arc_endpoints_sit_on_the_state_circles(self) -> None:
         import math

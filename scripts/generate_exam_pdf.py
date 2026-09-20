@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -136,6 +137,15 @@ def _styles() -> dict[str, ParagraphStyle]:
             fontName=serif,
             fontSize=11,
             leading=14,
+        ),
+        "subpart": ParagraphStyle(
+            "subpart",
+            parent=base["Normal"],
+            fontName=serif,
+            fontSize=11,
+            leading=15,
+            leftIndent=6 * mm,
+            firstLineIndent=-6 * mm,
         ),
         "small": ParagraphStyle(
             "small",
@@ -284,6 +294,38 @@ def _answer_space(question: dict[str, Any], styles: dict[str, ParagraphStyle]) -
     return AnswerLines(n)
 
 
+_ENUM = re.compile(r"(?:(?<=\s)|^)\(?([1-9])[.)]\s+")
+
+
+def split_enumerated(text: str) -> tuple[str, list[str]]:
+    """Pull an inline `1. ... 2. ...` run-on apart into a lead and its numbered asks."""
+    marks = [m for m in _ENUM.finditer(text)]
+    wanted = 1
+    kept = []
+    for match in marks:
+        if int(match.group(1)) == wanted:
+            kept.append(match)
+            wanted += 1
+    if len(kept) < 2:
+        return text.strip(), []
+    lead = text[: kept[0].start()].strip()
+    items = []
+    for i, match in enumerate(kept):
+        end = kept[i + 1].start() if i + 1 < len(kept) else len(text)
+        items.append(text[match.end() : end].strip())
+    return lead, [item for item in items if item]
+
+
+def _append_stem(bits: list[Any], text: str, styles: dict[str, ParagraphStyle]) -> None:
+    lead, items = split_enumerated(text)
+    bits.append(Spacer(1, 2 * mm))
+    if lead:
+        bits.append(_p(lead, styles["stem"]))
+    for i, item in enumerate(items, 1):
+        bits.append(Spacer(1, 1.2 * mm))
+        bits.append(_p(f"({i})  {item}", styles["subpart"]))
+
+
 def _diagram_spec(item: dict[str, Any]) -> dict[str, Any] | None:
     diagram = item.get("diagram")
     if isinstance(diagram, dict) and (diagram.get("states") or diagram.get("transitions")):
@@ -312,15 +354,15 @@ def _question_flowables(
     bits: list[Any] = [_question_heading(str(question.get("id") or ""), question.get("marks"), styles)]
     stem = str(question.get("stem") or "").strip()
     if stem:
-        bits.append(Spacer(1, 2 * mm))
-        bits.append(_p(stem, styles["stem"]))
+        _append_stem(bits, stem, styles)
     _append_code(bits, question.get("code"))
+    # the figure belongs with the sentence that introduces it, ahead of the numbered asks
+    _append_diagram(bits, question)
+    lead = len(bits)
     after = str(question.get("stem_after") or "").strip()
     if after:
-        bits.append(Spacer(1, 2 * mm))
-        bits.append(_p(after, styles["stem"]))
+        _append_stem(bits, after, styles)
     qtype = str(question.get("type") or "")
-    _append_diagram(bits, question)
     if qtype == "mcq" and question.get("choices"):
         bits.extend(_choices(question["choices"], styles))
     elif qtype == "true_false":
@@ -366,7 +408,8 @@ def _question_flowables(
     bits.append(Spacer(1, 3 * mm))
     if qtype in {"mcq", "true_false", "short", "fill_blank"}:
         return [KeepTogether(bits)]
-    return bits
+    # long questions may break across pages, but never between the stem and its figure
+    return [KeepTogether(bits[:lead]), *bits[lead:]]
 
 
 def _append_code(bits: list[Any], raw: Any) -> None:

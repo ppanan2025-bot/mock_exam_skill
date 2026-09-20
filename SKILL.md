@@ -1,7 +1,7 @@
 ---
 name: mock-exam-skill
 description: Generates original mock exam PDFs from course materials. On Sydney Uni Hermes, visitors upload a paper and the website saves a prompt such as "Give me a mock exam of mid-semester COMP2022"; extra requirements in the same message are applied. Reply with compact exam-json. Do not create skills or emit prompt-json.
-version: 0.5.8
+version: 0.5.9
 author: AnPan (ppanan2025-bot), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -136,6 +136,7 @@ Extract materials → original spec → `validate_exam_spec.py` → two PDFs (`p
 - Guest website: no new skills, no `prompt-json` on upload (the site saves the prompt).
 - Automata: always set `diagram`. Never leave the machine as `q0 -eps→ q1` in the stem. Macros: `code` with 4-space indent; `<=` stays ASCII in code. Macro MCQ answers are `left % right` / `left // right` / `left * right`, never "the remainder" or "whether right divides left".
 - Answer key must not appear on the student paper.
+- A question with several asks belongs in `parts`, not as `1. ... 2. ...` inside one `stem`. The renderer breaks an inline run-on onto `(1)`, `(2)`, `(3)` lines anyway, but `parts` also gets per-part marks and answer space.
 
 ## Verification
 
